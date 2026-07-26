@@ -4,7 +4,7 @@ import { GameScene } from "../scenes/GameScene";
 export const gameConfig: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     parent: "game-container",
-    backgroundColor: "#87ceeb",
+    backgroundColor: "#050816",
 
     // Define a base virtual resolution
     width: 1024,

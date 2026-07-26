@@ -7,6 +7,17 @@ export class GameScene extends Scene {
     private player!: Player;
     private pivotEngine!: PivotEngine;
     private platforms: BasePlatform[] = [];
+    private backgroundLayer!: Phaser.GameObjects.TileSprite;
+    private backgroundObjects: Phaser.GameObjects.Image[] = [];
+
+    private readonly backgroundObjectTextures = [
+        'background-asteroid-1',
+        'background-asteroid-2',
+        'background-planet-big',
+        'background-planet-small',
+        'background-blue-stars',
+        'background-blue-with-stars'
+    ];
 
     private heightText!: Phaser.GameObjects.Text;
     private maxHeightText!: Phaser.GameObjects.Text;
@@ -73,14 +84,29 @@ export class GameScene extends Scene {
     }
 
     preload() {
+        this.load.image('game-background', '/background/background.png');
+        this.load.image('background-asteroid-1', '/background/objects/asteroid-1.png');
+        this.load.image('background-asteroid-2', '/background/objects/asteroid-2.png');
+        this.load.image('background-blue-stars', '/background/objects/blue-stars.png');
+        this.load.image('background-blue-with-stars', '/background/objects/blue-with-stars.png');
+        this.load.image('background-planet-big', '/background/objects/prop-planet-big.png');
+        this.load.image('background-planet-small', '/background/objects/prop-planet-small.png');
+
         // Load the player sprite sheet
-        this.load.spritesheet('player', 'character/male_hero.png', {
+        this.load.spritesheet('player', '/character/male_hero.png', {
             frameWidth: 128,
             frameHeight: 128
         });
     }
 
     create() {
+        this.backgroundLayer = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'game-background')
+            .setOrigin(0, 0)
+            .setScrollFactor(0)
+            .setDepth(-2000);
+
+        this.seedBackgroundObjects();
+
         this.matter.world.setBounds(0, -100000, 20000, 100000 + this.groundReferenceY);
         this.matter.world.setGravity(0, 1.4);
 
@@ -191,6 +217,7 @@ export class GameScene extends Scene {
     }
 
     update(time: number, delta: number) {
+        this.updateBackgroundMotion();
 
         // Update the pivot engine routines
         if (this.pivotEngine) {
@@ -259,6 +286,91 @@ export class GameScene extends Scene {
                 this.cleanupOldPlatforms();
             }
         }
+    }
+
+    private seedBackgroundObjects() {
+        this.backgroundObjects.forEach(object => object.destroy());
+        this.backgroundObjects = [];
+
+        const topY = this.groundReferenceY - 3200;
+        const bottomY = this.groundReferenceY + 1200;
+
+        let currentY = bottomY;
+        while (currentY > topY) {
+            const object = this.createBackgroundObject(currentY);
+            this.backgroundObjects.push(object);
+            currentY -= Phaser.Math.Between(220, 520);
+        }
+    }
+
+    private createBackgroundObject(y: number) {
+        const textureKey = Phaser.Utils.Array.GetRandom(this.backgroundObjectTextures);
+        const x = Phaser.Math.Between(-180, this.scale.width + 180);
+        const parallax = Phaser.Math.FloatBetween(0.08, 0.25);
+        const scale = textureKey.includes('planet')
+            ? Phaser.Math.FloatBetween(0.25, 0.6)
+            : textureKey.includes('asteroid')
+                ? Phaser.Math.FloatBetween(0.15, 0.45)
+                : Phaser.Math.FloatBetween(0.45, 0.95);
+
+        const object = this.add.image(x, y, textureKey)
+            .setScrollFactor(parallax)
+            .setDepth(-1500)
+            .setAlpha(textureKey.includes('stars') ? 0.55 : 0.9)
+            .setScale(scale)
+            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+
+        return object;
+    }
+
+    private updateBackgroundMotion() {
+        if (this.backgroundLayer) {
+            this.backgroundLayer.tilePositionY = this.cameras.main.scrollY * 0.25;
+            this.backgroundLayer.tilePositionX = this.cameras.main.scrollX * 0.05;
+        }
+
+        if (!this.backgroundObjects.length) {
+            return;
+        }
+
+        const camera = this.cameras.main;
+        const worldView = camera.worldView;
+        const recycleTop = worldView.top - 1400;
+        const recycleBottom = worldView.bottom + 1400;
+
+        for (const object of this.backgroundObjects) {
+            if (object.y > recycleBottom) {
+                const replacement = this.getBackgroundObjectPlacement(recycleTop);
+                object.setPosition(replacement.x, replacement.y);
+                this.restyleBackgroundObject(object, replacement.textureKey);
+            } else if (object.y < recycleTop) {
+                const replacement = this.getBackgroundObjectPlacement(recycleBottom);
+                object.setPosition(replacement.x, replacement.y);
+                this.restyleBackgroundObject(object, replacement.textureKey);
+            }
+        }
+    }
+
+    private getBackgroundObjectPlacement(y: number) {
+        return {
+            x: Phaser.Math.Between(-180, this.scale.width + 180),
+            y,
+            textureKey: Phaser.Utils.Array.GetRandom(this.backgroundObjectTextures)
+        };
+    }
+
+    private restyleBackgroundObject(object: Phaser.GameObjects.Image, textureKey: string) {
+        const scale = textureKey.includes('planet')
+            ? Phaser.Math.FloatBetween(0.25, 0.6)
+            : textureKey.includes('asteroid')
+                ? Phaser.Math.FloatBetween(0.15, 0.45)
+                : Phaser.Math.FloatBetween(0.45, 0.95);
+
+        object.setTexture(textureKey);
+        object.setScrollFactor(Phaser.Math.FloatBetween(0.08, 0.25));
+        object.setAlpha(textureKey.includes('stars') ? 0.55 : 0.9);
+        object.setScale(scale);
+        object.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 
     private handlePlayerFailure() {
