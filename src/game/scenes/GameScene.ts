@@ -72,9 +72,41 @@ export class GameScene extends Scene {
         }
     }
 
+    preload() {
+        // Load the player sprite sheet
+        this.load.spritesheet('player', 'character/male_hero.png', {
+            frameWidth: 128,
+            frameHeight: 128
+        });
+    }
+
     create() {
         this.matter.world.setBounds(0, -100000, 20000, 100000 + this.groundReferenceY);
         this.matter.world.setGravity(0, 1.4);
+
+        // 1. Idle Breathing Animation
+        this.anims.create({
+            key: 'hero_idle',
+            frames: this.anims.generateFrameNumbers('player', { start: 10, end: 19 }),
+            frameRate: 10,
+            repeat: -1
+        });
+
+        // 2. Swinging / Grappling Air Loop
+        this.anims.create({
+            key: 'hero_swing',
+            frames: this.anims.generateFrameNumbers('player', { start: 40, end: 45 }),
+            frameRate: 12,
+            repeat: -1
+        });
+
+        // 3. High-Velocity Air Launch / Falling
+        this.anims.create({
+            key: 'hero_launch',
+            frames: this.anims.generateFrameNumbers('player', { start: 50, end: 53 }),
+            frameRate: 12,
+            repeat: 0
+        });
 
         const standardProps = { friction: 0.9, restitution: 0.05 };
 

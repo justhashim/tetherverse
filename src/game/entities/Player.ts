@@ -3,28 +3,34 @@ import { GAME_CONSTANTS } from "../config/game-constants";
 
 export type PlayerState = "IDLE" | "AIMING" | "LAUNCHED" | "FALLING";
 
-export class Player extends Phaser.GameObjects.Container {
+export class Player extends Phaser.GameObjects.Sprite {
     public override body!: MatterJS.BodyType;
     public playerState: PlayerState = "IDLE";
 
-    private spriteCircle: Phaser.GameObjects.Arc;
     private coreBodyRadius: number;
 
     constructor(scene: Phaser.Scene, x: number, y: number) {
-        super(scene, x, y);
+        super(scene, x, y, "player", 10);
 
         this.coreBodyRadius = GAME_CONSTANTS.PLAYER.RADIUS;
 
-        // Visual representation for development placeholder
-        // Using a built-in Geometric Arc avoids generating premature draw calls for missing textures
-        this.spriteCircle = scene.add.arc(0, 0, this.coreBodyRadius, 0, 360, false, 0xffffff);
-        this.spriteCircle.setStrokeStyle(3, 0x00ffcc); // Neon accent highlight
-        this.add(this.spriteCircle);
+        this.setDisplaySize(48, 48);
 
-        // Add container to the scene
+        // --- 2. DEPTH & MULTIVERSE GLOW ---
+        this.setDepth(100);
+
+        const selfWithPostFX = this as Phaser.GameObjects.Sprite & {
+            postFX?: {
+                addGlow: (color: number, intensity: number, blur: number, knockout: boolean) => void;
+            };
+        };
+        if (selfWithPostFX.postFX) {
+            selfWithPostFX.postFX.addGlow(0xFF007F, 3, 0, false);
+        }
+
         scene.add.existing(this);
 
-        // Set up Matter.js physics body configuration
+        // --- 3. MATTER.JS PHYSICS BODY ---
         const targetConfig: Phaser.Types.Physics.Matter.MatterBodyConfig = {
             shape: { type: 'circle', radius: this.coreBodyRadius },
             density: GAME_CONSTANTS.PLAYER.DENSITY,
@@ -35,19 +41,42 @@ export class Player extends Phaser.GameObjects.Container {
         };
 
         scene.matter.add.gameObject(this, targetConfig);
-
-        // Prevent player entity from infinitely spinning like a loose wheel unless structurally necessary
         this.scene.matter.body.setInertia(this.body, Infinity);
+
+        // --- 4. SAFE ANIMATION TRIGGER ---
+        if (scene.anims.exists('hero_idle')) {
+            this.play('hero_idle');
+        }
     }
 
     public updateState(newState: PlayerState): void {
         if (this.playerState === newState) return;
         this.playerState = newState;
+
+        if (!this.scene.anims.exists('hero_idle')) return;
+
+        switch (newState) {
+            case "IDLE":
+                this.play('hero_idle', true);
+                break;
+            case "AIMING":
+                this.play('hero_swing', true);
+                break;
+            case "LAUNCHED":
+            case "FALLING":
+                this.play('hero_launch', true);
+                break;
+        }
     }
 
-    /**
-     * Resets visual coordinates or forces completely stationary states safely.
-     */
+    public updateSpriteDirection(velocityX: number): void {
+        if (velocityX > 0.5) {
+            this.setFlipX(false);
+        } else if (velocityX < -0.5) {
+            this.setFlipX(true);
+        }
+    }
+
     public freeze(): void {
         this.scene.matter.body.setVelocity(this.body, { x: 0, y: 0 });
         this.scene.matter.body.setAngularVelocity(this.body, 0);
