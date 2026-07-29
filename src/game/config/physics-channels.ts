@@ -2,5 +2,6 @@ export const COLLISION_CHANNELS = {
     DEFAULT: 0x0001,
     PLAYER: 0x0002,
     JACK_TIP: 0x0004,
-    TERRAIN: 0x0008
+    TERRAIN: 0x0008,
+    HOOK_NODE: 0x0010
 };

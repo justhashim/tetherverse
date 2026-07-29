@@ -1,5 +1,3 @@
-// src/game/terrain/BasePlatform.ts
-
 import Phaser from "phaser";
 import { COLLISION_CHANNELS } from "../config/physics-channels";
 
@@ -9,7 +7,7 @@ export interface SurfaceProperties {
     isSlippery?: boolean;    // Custom modifier flag for the Frozen biome
 }
 
-export class BasePlatform extends Phaser.GameObjects.Rectangle {
+export class BasePlatform extends Phaser.GameObjects.Image {
     public override body!: MatterJS.BodyType;
     public surfaceProps: SurfaceProperties;
 
@@ -19,25 +17,35 @@ export class BasePlatform extends Phaser.GameObjects.Rectangle {
         y: number,
         width: number,
         height: number,
-        fillColor: number,
         props: SurfaceProperties
     ) {
-        super(scene, x, y, width, height, fillColor);
+        super(scene, x, y, 'multiverse_platform');
         this.surfaceProps = props;
 
         scene.add.existing(this);
+        const visualWidth = width * 2;
+        const visualHeight = height * 2;
 
-        const bodyConfig: Phaser.Types.Physics.Matter.MatterBodyConfig = {
+        this.setDisplaySize(visualWidth, visualHeight);
+        this.setDepth(20);
+
+        this.body = scene.matter.add.rectangle(x, y, visualWidth, visualHeight, {
             isStatic: true,
             friction: props.friction,
             restitution: props.restitution,
-            label: "TerrainPlatform",
+            label: "Platform",
             collisionFilter: {
                 category: COLLISION_CHANNELS.TERRAIN,
                 mask: COLLISION_CHANNELS.PLAYER | COLLISION_CHANNELS.JACK_TIP
             }
-        };
+        }) as MatterJS.BodyType;
+    }
 
-        scene.matter.add.gameObject(this, bodyConfig);
+    public override destroy(fromScene?: boolean): void {
+        if (this.body) {
+            this.scene.matter.world.remove(this.body);
+        }
+
+        super.destroy(fromScene);
     }
 }

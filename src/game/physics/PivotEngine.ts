@@ -4,11 +4,6 @@ import Phaser from "phaser";
 import { Player } from "../entities/Player";
 import { COLLISION_CHANNELS } from "../config/physics-channels";
 
-interface RayCollision extends MatterJS.ICollisionData {
-    point: { x: number; y: number };
-    body: MatterJS.BodyType;
-}
-
 export class PivotEngine {
     private scene: Phaser.Scene;
     private player: Player;
@@ -39,11 +34,11 @@ export class PivotEngine {
 
     private setupInputBindings(): void {
         // Pass 'true' to indicate this is a fresh, initial tap
-        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.attemptAnchor(pointer, true), this);
+        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.attemptAnchor(pointer), this);
         this.scene.input.on("pointerup", this.releaseAnchor, this);
     }
 
-    private attemptAnchor(pointer: Phaser.Input.Pointer, isInitialTap: boolean = false): void {
+    private attemptAnchor(pointer: Phaser.Input.Pointer): void {
         if (this.isHooked) return;
 
         this.pointerVector.set(pointer.worldX - this.player.x, pointer.worldY - this.player.y);
@@ -52,63 +47,45 @@ export class PivotEngine {
             this.pointerVector.setLength(this.jackLength);
         }
 
-        const rayEndX = this.player.x + this.pointerVector.x;
-        const rayEndY = this.player.y + this.pointerVector.y;
-
-        const bodies = this.scene.matter.world.getAllBodies().filter(
-            (b: MatterJS.BodyType) => b.collisionFilter?.category === COLLISION_CHANNELS.TERRAIN
+        const hookAnchors = this.scene.matter.world.getAllBodies().filter(
+            (body: MatterJS.BodyType) => body.label === 'HookAnchor'
         );
 
-        const rayCollisions = this.scene.matter.query.ray(
-            bodies,
-            this.player.body.position,
-            { x: rayEndX, y: rayEndY }
-        ) as RayCollision[];
+        let nearestAnchor: MatterJS.BodyType | null = null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
 
-        if (rayCollisions.length > 0) {
-            const closestHit = rayCollisions[0];
-            const platformBody = closestHit.body;
-
-            // --- 1. GROUND PISTON HOP ---
-            // If the platform we clicked is below the player's center-mass
-            if (platformBody.position.y > this.player.body.position.y + 15) {
-                if (isInitialTap) {
-                    const hopDirectionX = this.pointerVector.x > 0 ? 1 : -1;
-
-                    // Switch from applyForce to setVelocity for a guaranteed explosive jump!
-                    const jumpVelocityX = 8 * hopDirectionX;
-                    const jumpVelocityY = -16; // Massive instant upward speed
-
-                    this.scene.matter.body.setVelocity(
-                        this.player.body as MatterJS.BodyType,
-                        { x: jumpVelocityX, y: jumpVelocityY }
-                    );
-
-                    this.player.updateState("LAUNCHED");
-                }
-                return; // Stop here! Do not hook a rope to the floor.
-            }
-
-            // --- AIR SWING HOOK ---
-            const startPoint = new Phaser.Math.Vector2(this.player.body.position.x, this.player.body.position.y);
-            const endPoint = new Phaser.Math.Vector2(rayEndX, rayEndY);
-
-            this.anchorPoint.set(platformBody.position.x, platformBody.position.y);
-
-            this.isHooked = true;
-            this.player.updateState("LAUNCHED");
-
-            this.pivotConstraint = this.scene.matter.add.constraint(
-                this.player.body as MatterJS.BodyType,
-                platformBody,
-                this.pointerVector.length(),
-                0.2,
-                {
-                    pointA: { x: 0, y: 0 },
-                    pointB: { x: 0, y: 0 }
-                }
+        for (const body of hookAnchors) {
+            const distance = Phaser.Math.Distance.Between(
+                this.player.body.position.x,
+                this.player.body.position.y,
+                body.position.x,
+                body.position.y
             );
+
+            if (distance <= this.jackLength && distance < nearestDistance) {
+                nearestAnchor = body;
+                nearestDistance = distance;
+            }
         }
+
+        if (!nearestAnchor) {
+            return;
+        }
+
+        this.anchorPoint.set(nearestAnchor.position.x, nearestAnchor.position.y);
+        this.isHooked = true;
+        this.player.updateState("LAUNCHED");
+
+        this.pivotConstraint = this.scene.matter.add.constraint(
+            this.player.body as MatterJS.BodyType,
+            nearestAnchor,
+            nearestDistance,
+            0.2,
+            {
+                pointA: { x: 0, y: 0 },
+                pointB: { x: 0, y: 0 }
+            }
+        );
     }
 
     public updateEngineRoutines(): void {
@@ -121,7 +98,7 @@ export class PivotEngine {
 
         // The Yellow Aiming Laser (Allows drag-to-scan without hopping)
         if (pointer.isDown && !this.isHooked) {
-            this.attemptAnchor(pointer, false); // Scans for a wall hook while dragging
+            this.attemptAnchor(pointer); // Scans for a wall hook while dragging
 
             this.pointerVector.set(pointer.worldX - this.player.x, pointer.worldY - this.player.y);
             if (this.pointerVector.length() > this.jackLength) {
@@ -160,10 +137,23 @@ export class PivotEngine {
         }
     }
 
+    public getActiveAnchorPoint(): Phaser.Math.Vector2 | null {
+        if (!this.isHooked) {
+            return null;
+        }
+
+        return new Phaser.Math.Vector2(this.anchorPoint.x, this.anchorPoint.y);
+    }
+
+    public isCurrentlyHooked(): boolean {
+        return this.isHooked;
+    }
+
     private releaseAnchor(): void {
         if (!this.isHooked) return;
 
         this.isHooked = false;
+        this.anchorPoint.set(0, 0);
         if (this.pivotConstraint) {
             this.scene.matter.world.remove(this.pivotConstraint);
             this.pivotConstraint = null;

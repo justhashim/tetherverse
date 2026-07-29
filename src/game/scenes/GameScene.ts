@@ -3,13 +3,16 @@ import { Player } from "../entities/Player";
 import { GAME_CONSTANTS } from "../config/game-constants";
 import { BasePlatform } from "../terrain/BasePlatform";
 import { PivotEngine } from "../physics/PivotEngine";
+import { COLLISION_CHANNELS } from "../config/physics-channels";
 
 export class GameScene extends Scene {
     private player!: Player;
     private pivotEngine!: PivotEngine;
     private platforms: BasePlatform[] = [];
+    private hookNodes: Phaser.Physics.Matter.Image[] = [];
     private backgroundLayer!: Phaser.GameObjects.TileSprite;
     private backgroundObjects: Phaser.GameObjects.Image[] = [];
+    private tetherGraphics!: Phaser.GameObjects.Graphics;
 
     private readonly backgroundObjectTextures = [
         'background-asteroid-1',
@@ -91,6 +94,8 @@ export class GameScene extends Scene {
         // this.load.image('background-blue-with-stars', '/background/objects/blue-with-stars.png');
         this.load.image('background-planet-big', '/background/objects/prop-planet-big.png');
         this.load.image('background-planet-small', '/background/objects/prop-planet-small.png');
+        this.load.image('multiverse_platform', '/assets/platform.png');
+        this.load.image('hook_node', '/assets/hook_node.png');
 
         // Load the player sprite sheet
         this.load.spritesheet('hero_sheet', '/character/hero.png', {
@@ -112,6 +117,9 @@ export class GameScene extends Scene {
 
         this.matter.world.setBounds(0, -100000, 20000, 100000 + this.groundReferenceY);
         this.matter.world.setGravity(0, 1.4);
+
+        this.tetherGraphics = this.add.graphics();
+        this.tetherGraphics.setDepth(90);
 
         // Inside src/game/scenes/GameScene.ts -> create()
 
@@ -153,8 +161,9 @@ export class GameScene extends Scene {
 
         // THE SPAWN PEDESTAL: Shrunk down to a tiny block so you can easily swing off the edge
         this.platforms.push(
-            new BasePlatform(this, 200, this.groundReferenceY + 20, 80, 40, 0x228B22, standardProps)
+            new BasePlatform(this, 200, this.groundReferenceY + 20, 80, 40, standardProps)
         );
+        this.spawnHookAnchor(200, this.groundReferenceY + 20 - 120);
 
         // Initialize player floating slightly above the pedestal
         this.player = new Player(this, 200, this.groundReferenceY - 50);
@@ -162,8 +171,9 @@ export class GameScene extends Scene {
 
         // THE TUTORIAL ANCHOR: Placed at a perfect diagonal angle for the first swing
         this.platforms.push(
-            new BasePlatform(this, 450, this.groundReferenceY - 150, 120, 40, 0x334455, standardProps)
+            new BasePlatform(this, 450, this.groundReferenceY - 150, 120, 40, standardProps)
         );
+        this.spawnHookAnchor(450, this.groundReferenceY - 150 - 120);
 
         // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly
         this.add.text(250, this.groundReferenceY - 230, "1. Tap & HOLD here to Hook", {
@@ -193,14 +203,17 @@ export class GameScene extends Scene {
 
         // Spacing out the rest of the mountain to catch your launch
         this.platforms.push(
-            new BasePlatform(this, 800, this.groundReferenceY - 300, 150, 30, 0x445566, standardProps)
+            new BasePlatform(this, 800, this.groundReferenceY - 300, 150, 30, standardProps)
         );
+        this.spawnHookAnchor(800, this.groundReferenceY - 300 - 120);
         this.platforms.push(
-            new BasePlatform(this, 1150, this.groundReferenceY - 450, 150, 30, 0x445566, standardProps)
+            new BasePlatform(this, 1150, this.groundReferenceY - 450, 150, 30, standardProps)
         );
+        this.spawnHookAnchor(1150, this.groundReferenceY - 450 - 120);
         this.platforms.push(
-            new BasePlatform(this, 1550, this.groundReferenceY - 650, 200, 150, 0x553344, standardProps)
+            new BasePlatform(this, 1550, this.groundReferenceY - 650, 200, 150, standardProps)
         );
+        this.spawnHookAnchor(1550, this.groundReferenceY - 650 - 160);
 
         // --- CAMERA SETUP ---
         // Tell the camera to lock onto the player
@@ -237,6 +250,18 @@ export class GameScene extends Scene {
         // Update the pivot engine routines
         if (this.pivotEngine) {
             this.pivotEngine.updateEngineRoutines();
+        }
+
+        const activeAnchor = this.pivotEngine?.getActiveAnchorPoint();
+        if (this.player && activeAnchor && this.pivotEngine?.isCurrentlyHooked()) {
+            this.drawQuantumTether(
+                this.player.x,
+                this.player.y - 10,
+                activeAnchor.x,
+                activeAnchor.y
+            );
+        } else if (this.tetherGraphics) {
+            this.tetherGraphics.clear();
         }
 
         this.settlePlayerIfOnSurface();
@@ -303,6 +328,46 @@ export class GameScene extends Scene {
                 this.cleanupOldPlatforms();
             }
         }
+    }
+
+    private spawnHookAnchor(x: number, y: number): void {
+        const node = this.matter.add.image(x, y, 'hook_node', undefined, {
+            isStatic: true,
+            isSensor: true,
+            label: 'HookAnchor',
+            collisionFilter: {
+                category: COLLISION_CHANNELS.HOOK_NODE,
+                mask: 0
+            }
+        });
+
+        node.setDisplaySize(80, 80);
+        node.setDepth(20);
+        this.hookNodes.push(node);
+    }
+
+    private seedHookNodes(): void {
+        this.hookNodes.forEach(node => node.destroy());
+        this.hookNodes = [];
+
+        this.spawnHookAnchor(200, this.groundReferenceY + 20 - 120);
+        this.spawnHookAnchor(450, this.groundReferenceY - 150 - 120);
+        this.spawnHookAnchor(800, this.groundReferenceY - 300 - 120);
+        this.spawnHookAnchor(1150, this.groundReferenceY - 450 - 120);
+        this.spawnHookAnchor(1550, this.groundReferenceY - 650 - 160);
+    }
+
+    private drawQuantumTether(startX: number, startY: number, targetX: number, targetY: number): void {
+        this.tetherGraphics.clear();
+
+        this.tetherGraphics.lineStyle(8, 0xFF007F, 0.4);
+        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+        this.tetherGraphics.lineStyle(4, 0x00FFCC, 0.8);
+        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+        this.tetherGraphics.lineStyle(1.5, 0xFFFFFF, 1.0);
+        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
     }
 
     private settlePlayerIfOnSurface(): void {
@@ -452,11 +517,9 @@ export class GameScene extends Scene {
         const width = Phaser.Math.Between(80, 200);
         const height = Phaser.Math.Between(30, 60);
 
-        // Generate a random muted mountain color (grays, dark blues, slate)
-        const color = Phaser.Display.Color.RandomRGB(50, 150).color;
-
-        const p = new BasePlatform(this, nextX, nextY, width, height, color, { friction: 0.9, restitution: 0.05 });
+        const p = new BasePlatform(this, nextX, nextY, width, height, { friction: 0.9, restitution: 0.05 });
         this.platforms.push(p);
+        this.spawnHookAnchor(nextX, nextY - Math.max(110, height + 40));
 
         // Update the trackers for the next loop
         this.lastGeneratedX = nextX;
@@ -487,6 +550,21 @@ export class GameScene extends Scene {
             } catch (error) {
                 // If anything goes wrong reading the position, force remove it to prevent looping crashes
                 this.platforms.splice(i, 1);
+            }
+        }
+
+        for (let i = this.hookNodes.length - 1; i >= 0; i--) {
+            const node = this.hookNodes[i];
+
+            if (!node || !node.body) {
+                this.hookNodes.splice(i, 1);
+                continue;
+            }
+
+            const nodeY = node.body.position.y;
+            if (nodeY > this.player.y + 2200) {
+                node.destroy();
+                this.hookNodes.splice(i, 1);
             }
         }
     }
