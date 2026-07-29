@@ -14,6 +14,7 @@ export class PivotEngine {
 
     private isHooked: boolean = false;
     private jackLength: number = 300; // Set to 300 so you can comfortably reach the first platform
+    private anchorHitRadius: number = 40;
     private debugGraphics: Phaser.GameObjects.Graphics;
 
     constructor(scene: Phaser.Scene, player: Player) {
@@ -51,35 +52,51 @@ export class PivotEngine {
             (body: MatterJS.BodyType) => body.label === 'HookAnchor'
         );
 
-        let nearestAnchor: MatterJS.BodyType | null = null;
-        let nearestDistance = Number.POSITIVE_INFINITY;
+        let aimedAnchor: MatterJS.BodyType | null = null;
+        let aimedDistance = Number.POSITIVE_INFINITY;
 
         for (const body of hookAnchors) {
-            const distance = Phaser.Math.Distance.Between(
+            const distanceToPointer = Phaser.Math.Distance.Between(
+                pointer.worldX,
+                pointer.worldY,
+                body.position.x,
+                body.position.y
+            );
+
+            const distanceToPlayer = Phaser.Math.Distance.Between(
                 this.player.body.position.x,
                 this.player.body.position.y,
                 body.position.x,
                 body.position.y
             );
 
-            if (distance <= this.jackLength && distance < nearestDistance) {
-                nearestAnchor = body;
-                nearestDistance = distance;
+            if (
+                distanceToPointer <= this.anchorHitRadius &&
+                distanceToPlayer <= this.jackLength &&
+                distanceToPointer < aimedDistance
+            ) {
+                aimedAnchor = body;
+                aimedDistance = distanceToPointer;
             }
         }
 
-        if (!nearestAnchor) {
+        if (!aimedAnchor) {
             return;
         }
 
-        this.anchorPoint.set(nearestAnchor.position.x, nearestAnchor.position.y);
+        this.anchorPoint.set(aimedAnchor.position.x, aimedAnchor.position.y);
         this.isHooked = true;
         this.player.updateState("LAUNCHED");
 
         this.pivotConstraint = this.scene.matter.add.constraint(
             this.player.body as MatterJS.BodyType,
-            nearestAnchor,
-            nearestDistance,
+            aimedAnchor,
+            Phaser.Math.Distance.Between(
+                this.player.body.position.x,
+                this.player.body.position.y,
+                aimedAnchor.position.x,
+                aimedAnchor.position.y
+            ),
             0.2,
             {
                 pointA: { x: 0, y: 0 },
