@@ -15,7 +15,7 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.coreBodyRadius = GAME_CONSTANTS.PLAYER.RADIUS;
 
         this.setDisplaySize(98, 98);
-        this.setOrigin(0.5, 2);
+        this.setOrigin(0.5, 0.5);
 
 
         // --- 2. DEPTH & MULTIVERSE GLOW ---
@@ -44,7 +44,6 @@ export class Player extends Phaser.GameObjects.Sprite {
         };
 
         scene.matter.add.gameObject(this, targetConfig);
-        this.setFixedRotation();
         this.scene.matter.body.setInertia(this.body, Infinity);
 
         // --- 4. SAFE ANIMATION TRIGGER ---
@@ -59,7 +58,8 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.stop();
 
         if (newState === "IDLE") {
-            this.setVelocity(0, this.body.velocity.y);
+            this.scene.matter.body.setVelocity(this.body, { x: 0, y: 0 });
+            this.scene.matter.body.setAngularVelocity(this.body, 0);
             this.play('hero_idle', true);
         } else if (newState === "AIMING") {
             this.play('hero_aim', true);

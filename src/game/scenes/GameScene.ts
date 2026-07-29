@@ -157,23 +157,71 @@ export class GameScene extends Scene {
             });
         }
 
+        // Replace the platform & player initialization inside create() in GameScene.ts:
+
+        // --- STARTING PLATFORM & PLAYER SPAWN FIX ---
         const standardProps = { friction: 0.9, restitution: 0.05 };
 
-        // THE SPAWN PEDESTAL: Shrunk down to a tiny block so you can easily swing off the edge
-        this.platforms.push(
-            new BasePlatform(this, 200, this.groundReferenceY + 20, 80, 40, standardProps)
-        );
-        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 150, 220);
+        // 1. Center starting platform at x = 250 (directly in line with tutorial lane)
+        const platformX = 400;
+        const platformY = this.groundReferenceY + 20;
 
-        // Initialize player floating slightly above the pedestal
-        this.player = new Player(this, 200, this.groundReferenceY - 50);
+        const startPlatform = this.matter.add.image(
+            platformX,
+            platformY,
+            "multiverse_platform",
+            undefined,
+            {
+                isStatic: true,
+                label: "Platform",
+            }
+        );
+
+        startPlatform.setDepth(20);
+        // Expand width slightly to give a solid base under the player
+        startPlatform.setDisplaySize(100, 40);
+
+        // Get exact platform center
+        // const { x: spawnX } = startPlatform.getCenter();
+
+        startPlatform.setOrigin(0.5, 0.5);
+
+        const spawnX = startPlatform.x; // Exact center X of the platform body
+
+        // Create player centered on platform
+        this.player = new Player(this, spawnX, 0);
+
+        // Position player directly on top of the platform top edge
+        const spawnY =
+            startPlatform.y -
+            (startPlatform.displayHeight / 2) -
+            GAME_CONSTANTS.PLAYER.RADIUS;
+
+        this.player.setPosition(spawnX, spawnY);
+
+        // Reset velocity and set initial state
+        this.player.updateState("IDLE");
+
+        this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
+        this.matter.body.setAngularVelocity(this.player.body, 0);
+
+        const body = this.player.body as MatterJS.BodyType;
+        body.force.x = 0;
+        body.force.y = 0;
+        body.torque = 0;
+
+        // Initialize PivotEngine
         this.pivotEngine = new PivotEngine(this, this.player);
 
-        // THE TUTORIAL ANCHOR: Placed at a perfect diagonal angle for the first swing
+        // Add startPlatform into the platforms tracking array so collision/settle checks work seamlessly
+        const baseStartPlatform = new BasePlatform(this, platformX, platformY, 240, 80, { isStatic: true });
+        this.platforms.push(baseStartPlatform);
+
+        // --- TUTORIAL ANCHORS & TEXT ALIGNMENT ---
+        // Placed ahead at x = 450 for a clean diagonal grapple line
         this.platforms.push(
             new BasePlatform(this, 450, this.groundReferenceY - 150, 120, 40, standardProps)
         );
-        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 160, 240);
 
         // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly
         this.add.text(250, this.groundReferenceY - 230, "1. Tap & HOLD here to Hook", {
@@ -205,24 +253,18 @@ export class GameScene extends Scene {
         this.platforms.push(
             new BasePlatform(this, 800, this.groundReferenceY - 300, 150, 30, standardProps)
         );
-        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 180, 260);
         this.platforms.push(
             new BasePlatform(this, 1150, this.groundReferenceY - 450, 150, 30, standardProps)
         );
-        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 180, 260);
         this.platforms.push(
             new BasePlatform(this, 1550, this.groundReferenceY - 650, 200, 150, standardProps)
         );
-        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 220, 320);
+
+        this.seedHookNodes();
 
         // --- CAMERA SETUP ---
-        // Tell the camera to lock onto the player
-        // The 'true' enables smooth sub-pixel rendering, and the 0.1 values add a nice elastic lerp (delay)
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-
-        // Shift the camera focus 200 pixels DOWN
-        // This pushes the player toward the bottom third of the screen so you can see what you are jumping to!
-        this.cameras.main.setFollowOffset(0, 200);
+        this.cameras.main.setFollowOffset(-this.scale.width * 0.26, 170);
 
         // Static UI Height Tracker
         this.heightText = this.add.text(20, 20, "Altitude: 0m", {
@@ -250,6 +292,10 @@ export class GameScene extends Scene {
         // Update the pivot engine routines
         if (this.pivotEngine) {
             this.pivotEngine.updateEngineRoutines();
+        }
+
+        if (this.player) {
+            this.constrainPlayerToLeftLane();
         }
 
         const activeAnchor = this.pivotEngine?.getActiveAnchorPoint();
@@ -358,11 +404,36 @@ export class GameScene extends Scene {
         this.hookNodes.forEach(node => node.destroy());
         this.hookNodes = [];
 
-        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 150, 220);
-        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 160, 240);
-        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 180, 260);
-        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 180, 260);
-        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 220, 320);
+        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 260, 380);
+        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 280, 410);
+        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 300, 440);
+        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 320, 470);
+        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 340, 500);
+    }
+
+    private constrainPlayerToLeftLane(): void {
+        const minScreenX = 100;
+        const maxScreenX = 350;
+        const screenX = this.player.x - this.cameras.main.scrollX;
+
+        if (screenX >= minScreenX && screenX <= maxScreenX) {
+            return;
+        }
+
+        const targetScreenX = screenX < minScreenX ? minScreenX : maxScreenX;
+        const targetWorldX = this.cameras.main.scrollX + targetScreenX;
+
+        this.matter.body.setPosition(this.player.body, {
+            x: targetWorldX,
+            y: this.player.body.position.y
+        });
+
+        const currentVelocity = this.player.body.velocity;
+        const clampedVelocityX = Math.abs(currentVelocity.x) > 0.1 ? 0 : currentVelocity.x;
+        this.matter.body.setVelocity(this.player.body, {
+            x: clampedVelocityX,
+            y: currentVelocity.y
+        });
     }
 
     private drawQuantumTether(startX: number, startY: number, targetX: number, targetY: number): void {
@@ -527,7 +598,9 @@ export class GameScene extends Scene {
 
         const p = new BasePlatform(this, nextX, nextY, width, height, { friction: 0.9, restitution: 0.05 });
         this.platforms.push(p);
-        this.spawnHookAnchor(nextX, nextY - Math.max(110, height + 40));
+        const horizontalOffset = Math.max(240, width + 120);
+        const ropeLength = horizontalOffset + Phaser.Math.Between(120, 180);
+        this.spawnTopRightHookAnchor(nextX, nextY, horizontalOffset, ropeLength);
 
         // Update the trackers for the next loop
         this.lastGeneratedX = nextX;
