@@ -1,5 +1,6 @@
 import Phaser, { Scene } from "phaser";
 import { Player } from "../entities/Player";
+import { GAME_CONSTANTS } from "../config/game-constants";
 import { BasePlatform } from "../terrain/BasePlatform";
 import { PivotEngine } from "../physics/PivotEngine";
 
@@ -238,6 +239,8 @@ export class GameScene extends Scene {
             this.pivotEngine.updateEngineRoutines();
         }
 
+        this.settlePlayerIfOnSurface();
+
         if (this.player) {
             // --- FAIL CONDITIONAL CHECK ---
             // If the player falls past the initial base ground zone, execute fail loop
@@ -298,6 +301,33 @@ export class GameScene extends Scene {
 
                 // Clean up old platforms far below the player to save mobile memory
                 this.cleanupOldPlatforms();
+            }
+        }
+    }
+
+    private settlePlayerIfOnSurface(): void {
+        if (!this.player || this.player.playerState === "AIMING") {
+            return;
+        }
+
+        const playerRadius = GAME_CONSTANTS.PLAYER.RADIUS;
+        const playerBottom = this.player.body.position.y + playerRadius;
+        const playerX = this.player.body.position.x;
+
+        for (const platform of this.platforms) {
+            if (!platform || !platform.active || !platform.body) {
+                continue;
+            }
+
+            const platformTop = platform.body.position.y - (platform.displayHeight / 2);
+            const platformLeft = platform.body.position.x - (platform.displayWidth / 2) - playerRadius;
+            const platformRight = platform.body.position.x + (platform.displayWidth / 2) + playerRadius;
+            const withinSurfaceBand = playerBottom >= platformTop - 2 && playerBottom <= platformTop + 8;
+            const withinHorizontalBounds = playerX >= platformLeft && playerX <= platformRight;
+
+            if (withinSurfaceBand && withinHorizontalBounds && this.player.body.velocity.y >= 0) {
+                this.player.updateState("IDLE");
+                return;
             }
         }
     }

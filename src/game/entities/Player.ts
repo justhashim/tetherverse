@@ -15,7 +15,7 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.coreBodyRadius = GAME_CONSTANTS.PLAYER.RADIUS;
 
         this.setDisplaySize(98, 98);
-        this.setOrigin(0.5, 0.8);
+        this.setOrigin(0.5, 2);
 
 
         // --- 2. DEPTH & MULTIVERSE GLOW ---
