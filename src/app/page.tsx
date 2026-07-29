@@ -140,14 +140,7 @@ export default function Home() {
   const [leaders, setLeaders] = useState<LeaderboardPlayer[]>([]);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
 
-  // Pre-load the menu components in parallel background states while intro plays
-  const [isMenuMounted, setIsMenuMounted] = useState(false);
-
-  useEffect(() => {
-    if (currentView === 'menu') {
-      setIsMenuMounted(true);
-    }
-  }, [currentView]);
+  const [isMenuMounted, setIsMenuMounted] = useState(currentView === "menu");
 
   useEffect(() => {
     if (currentView === 'leaderboard') {
@@ -214,8 +207,12 @@ export default function Home() {
 
       {/* VIEW A: COEXISTENT INTRUSIVE CINEMATIC LAYER */}
       {currentView === 'intro' && (
-        <IntroVideo onComplete={() => setCurrentView('menu')} />
-      )}
+        <IntroVideo
+          onComplete={() => {
+            setIsMenuMounted(true);
+            setCurrentView("menu");
+          }}
+        />)}
 
       {/* VIEW B: MAIN LAUNCHER INTERFACE (Renders underneath the fadeout layer seamlessly) */}
       {(currentView === 'menu' || isMenuMounted) && (
