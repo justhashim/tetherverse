@@ -213,10 +213,6 @@ export class GameScene extends Scene {
         // Initialize PivotEngine
         this.pivotEngine = new PivotEngine(this, this.player);
 
-        // Add startPlatform into the platforms tracking array so collision/settle checks work seamlessly
-        const baseStartPlatform = new BasePlatform(this, platformX, platformY, 240, 80, { isStatic: true });
-        this.platforms.push(baseStartPlatform);
-
         // --- TUTORIAL ANCHORS & TEXT ALIGNMENT ---
         // Placed ahead at x = 450 for a clean diagonal grapple line
         this.platforms.push(
@@ -587,7 +583,7 @@ export class GameScene extends Scene {
         const deltaX = Phaser.Math.Between(-maxDeltaX, maxDeltaX);
 
         let nextX = this.lastGeneratedX + deltaX;
-        let nextY = this.lastGeneratedY + deltaY;
+        const nextY = this.lastGeneratedY + deltaY;
 
         // Clamp X so the mountain doesn't drift infinitely left or right off into the void
         nextX = Phaser.Math.Clamp(nextX, 0, 3000);
@@ -609,27 +605,17 @@ export class GameScene extends Scene {
 
     private cleanupOldPlatforms() {
         for (let i = this.platforms.length - 1; i >= 0; i--) {
-            const p = this.platforms[i] as any;
+            const platform = this.platforms[i];
 
-            //If the object or its physics body is already gone, just drop it from the array
-            if (!p || (!p.body && !p.gameObject?.body)) {
+            if (!platform || !platform.body) {
                 this.platforms.splice(i, 1);
                 continue;
             }
 
-            try {
-                // extract the Y coordinate depending on how BasePlatform is structured
-                const platformY = p.body ? p.body.position.y : p.y;
+            const platformY = platform.body.position.y;
 
-                // Cull if it's 2000px below the player
-                if (platformY > this.player.y + 2000) {
-                    if (typeof p.destroy === 'function') {
-                        p.destroy();
-                    }
-                    this.platforms.splice(i, 1);
-                }
-            } catch (error) {
-                // If anything goes wrong reading the position, force remove it to prevent looping crashes
+            if (platformY > this.player.y + 2000) {
+                platform.destroy();
                 this.platforms.splice(i, 1);
             }
         }
@@ -642,8 +628,7 @@ export class GameScene extends Scene {
                 continue;
             }
 
-            const nodeY = node.body.position.y;
-            if (nodeY > this.player.y + 2200) {
+            if (node.body.position.y > this.player.y + 2200) {
                 node.destroy();
                 this.hookNodes.splice(i, 1);
             }
