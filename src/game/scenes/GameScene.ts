@@ -16,7 +16,6 @@ export class GameScene extends Scene {
         'background-planet-big',
         'background-planet-small',
         'background-blue-stars',
-        'background-blue-with-stars'
     ];
 
     private heightText!: Phaser.GameObjects.Text;
@@ -88,14 +87,16 @@ export class GameScene extends Scene {
         this.load.image('background-asteroid-1', '/background/objects/asteroid-1.png');
         this.load.image('background-asteroid-2', '/background/objects/asteroid-2.png');
         this.load.image('background-blue-stars', '/background/objects/blue-stars.png');
-        this.load.image('background-blue-with-stars', '/background/objects/blue-with-stars.png');
+        // this.load.image('background-blue-with-stars', '/background/objects/blue-with-stars.png');
         this.load.image('background-planet-big', '/background/objects/prop-planet-big.png');
         this.load.image('background-planet-small', '/background/objects/prop-planet-small.png');
 
         // Load the player sprite sheet
-        this.load.spritesheet('player', '/character/male_hero.png', {
-            frameWidth: 128,
-            frameHeight: 128
+        this.load.spritesheet('hero_sheet', '/character/hero.png', {
+            frameWidth: 280,
+            frameHeight: 280,
+            margin: 0,
+            spacing: 0
         });
     }
 
@@ -103,36 +104,49 @@ export class GameScene extends Scene {
         this.backgroundLayer = this.add.tileSprite(0, 0, this.scale.width, this.scale.height, 'game-background')
             .setOrigin(0, 0)
             .setScrollFactor(0)
-            .setDepth(-2000);
+            .setDepth(-2000)
+            .setTileScale(3.5, 3.5);
 
         this.seedBackgroundObjects();
 
         this.matter.world.setBounds(0, -100000, 20000, 100000 + this.groundReferenceY);
         this.matter.world.setGravity(0, 1.4);
 
-        // 1. Idle Breathing Animation
-        this.anims.create({
-            key: 'hero_idle',
-            frames: this.anims.generateFrameNumbers('player', { start: 10, end: 19 }),
-            frameRate: 10,
-            repeat: -1
-        });
+        // Inside src/game/scenes/GameScene.ts -> create()
 
-        // 2. Swinging / Grappling Air Loop
-        this.anims.create({
-            key: 'hero_swing',
-            frames: this.anims.generateFrameNumbers('player', { start: 40, end: 45 }),
-            frameRate: 12,
-            repeat: -1
-        });
+        if (!this.anims.exists('hero_idle')) {
+            // Row 1: Standing Idle (Frames 0 to 4)
+            this.anims.create({
+                key: 'hero_idle',
+                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 0, end: 4 }),
+                frameRate: 8,
+                repeat: -1
+            });
 
-        // 3. High-Velocity Air Launch / Falling
-        this.anims.create({
-            key: 'hero_launch',
-            frames: this.anims.generateFrameNumbers('player', { start: 50, end: 53 }),
-            frameRate: 12,
-            repeat: 0
-        });
+            // Row 2: Crouching / Launch Prep (Frames 5 to 9)
+            this.anims.create({
+                key: 'hero_aim',
+                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 5, end: 9 }),
+                frameRate: 10,
+                repeat: 0
+            });
+
+            // Row 3: Freefall / Tumbling Down (Frames 10 to 14)
+            this.anims.create({
+                key: 'hero_fall',
+                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 10, end: 14 }),
+                frameRate: 10,
+                repeat: 0
+            });
+
+            // Row 4: Air-Drifting / Reaching Pose (Frames 15 to 19)
+            this.anims.create({
+                key: 'hero_swing',
+                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 15, end: 19 }),
+                frameRate: 10,
+                repeat: 0
+            });
+        }
 
         const standardProps = { friction: 0.9, restitution: 0.05 };
 

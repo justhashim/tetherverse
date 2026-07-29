@@ -10,13 +10,13 @@ export class Player extends Phaser.GameObjects.Sprite {
     private coreBodyRadius: number;
 
     constructor(scene: Phaser.Scene, x: number, y: number) {
-        super(scene, x, y, "player", 10);
+        super(scene, x, y, "hero_sheet", 10);
 
         this.coreBodyRadius = GAME_CONSTANTS.PLAYER.RADIUS;
 
-        this.setDisplaySize(128, 128);
+        this.setDisplaySize(98, 98);
+        this.setOrigin(0.5, 0.8);
 
-        this.setOrigin(0.5, 0.65);
 
         // --- 2. DEPTH & MULTIVERSE GLOW ---
         this.setDepth(100);
@@ -37,12 +37,14 @@ export class Player extends Phaser.GameObjects.Sprite {
             shape: { type: 'circle', radius: this.coreBodyRadius },
             density: GAME_CONSTANTS.PLAYER.DENSITY,
             friction: GAME_CONSTANTS.PLAYER.FRICTION,
+            frictionStatic: GAME_CONSTANTS.PLAYER.FRICTION_STATIC,
             frictionAir: GAME_CONSTANTS.PLAYER.FRICTION_AIR,
             restitution: GAME_CONSTANTS.PLAYER.BOUNCE,
             label: "PlayerBody"
         };
 
         scene.matter.add.gameObject(this, targetConfig);
+        this.setFixedRotation();
         this.scene.matter.body.setInertia(this.body, Infinity);
 
         // --- 4. SAFE ANIMATION TRIGGER ---
@@ -54,28 +56,27 @@ export class Player extends Phaser.GameObjects.Sprite {
     public updateState(newState: PlayerState): void {
         if (this.playerState === newState) return;
         this.playerState = newState;
+        this.stop();
 
-        if (!this.scene.anims.exists('hero_idle')) return;
-
-        switch (newState) {
-            case "IDLE":
-                this.play('hero_idle', true);
-                break;
-            case "AIMING":
-                this.play('hero_swing', true);
-                break;
-            case "LAUNCHED":
-            case "FALLING":
-                this.play('hero_launch', true);
-                break;
+        if (newState === "IDLE") {
+            this.setVelocity(0, this.body.velocity.y);
+            this.play('hero_idle', true);
+        } else if (newState === "AIMING") {
+            this.play('hero_aim', true);
+        } else if (newState === "LAUNCHED") {
+            this.play('hero_swing', true);
+        } else if (newState === "FALLING") {
+            this.play('hero_fall', true);
         }
     }
 
     public updateSpriteDirection(velocityX: number): void {
-        if (velocityX > 0.5) {
-            this.setFlipX(false);
-        } else if (velocityX < -0.5) {
-            this.setFlipX(true);
+        const THRESHOLD = 0.8; // Increased threshold to stop rapid flickering
+
+        if (velocityX > THRESHOLD) {
+            this.setFlipX(false); // Face Right
+        } else if (velocityX < -THRESHOLD) {
+            this.setFlipX(true);  // Face Left
         }
     }
 

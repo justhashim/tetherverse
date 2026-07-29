@@ -3,7 +3,8 @@ export const GAME_CONSTANTS = {
         RADIUS: 24,
         DENSITY: 0.004, // Matter.js automatically calculates mass based on area * density
         FRICTION: 0.1,
-        FRICTION_AIR: 0.01,
+        FRICTION_STATIC: 0.5,
+        FRICTION_AIR: 0.05,
         BOUNCE: 0.2,    // Restitution
     },
     LAUNCH: {
