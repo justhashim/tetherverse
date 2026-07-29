@@ -163,7 +163,7 @@ export class GameScene extends Scene {
         this.platforms.push(
             new BasePlatform(this, 200, this.groundReferenceY + 20, 80, 40, standardProps)
         );
-        this.spawnHookAnchor(200, this.groundReferenceY + 20 - 120);
+        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 150, 220);
 
         // Initialize player floating slightly above the pedestal
         this.player = new Player(this, 200, this.groundReferenceY - 50);
@@ -173,7 +173,7 @@ export class GameScene extends Scene {
         this.platforms.push(
             new BasePlatform(this, 450, this.groundReferenceY - 150, 120, 40, standardProps)
         );
-        this.spawnHookAnchor(450, this.groundReferenceY - 150 - 120);
+        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 160, 240);
 
         // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly
         this.add.text(250, this.groundReferenceY - 230, "1. Tap & HOLD here to Hook", {
@@ -205,15 +205,15 @@ export class GameScene extends Scene {
         this.platforms.push(
             new BasePlatform(this, 800, this.groundReferenceY - 300, 150, 30, standardProps)
         );
-        this.spawnHookAnchor(800, this.groundReferenceY - 300 - 120);
+        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 180, 260);
         this.platforms.push(
             new BasePlatform(this, 1150, this.groundReferenceY - 450, 150, 30, standardProps)
         );
-        this.spawnHookAnchor(1150, this.groundReferenceY - 450 - 120);
+        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 180, 260);
         this.platforms.push(
             new BasePlatform(this, 1550, this.groundReferenceY - 650, 200, 150, standardProps)
         );
-        this.spawnHookAnchor(1550, this.groundReferenceY - 650 - 160);
+        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 220, 320);
 
         // --- CAMERA SETUP ---
         // Tell the camera to lock onto the player
@@ -330,6 +330,14 @@ export class GameScene extends Scene {
         }
     }
 
+    private spawnTopRightHookAnchor(platformX: number, platformY: number, horizontalOffset: number, ropeLength: number): void {
+        const verticalOffset = Math.sqrt(Math.max(0, (ropeLength * ropeLength) - (horizontalOffset * horizontalOffset)));
+        const anchorX = platformX + horizontalOffset;
+        const anchorY = platformY - verticalOffset;
+
+        this.spawnHookAnchor(anchorX, anchorY);
+    }
+
     private spawnHookAnchor(x: number, y: number): void {
         const node = this.matter.add.image(x, y, 'hook_node', undefined, {
             isStatic: true,
@@ -350,11 +358,11 @@ export class GameScene extends Scene {
         this.hookNodes.forEach(node => node.destroy());
         this.hookNodes = [];
 
-        this.spawnHookAnchor(200, this.groundReferenceY + 20 - 120);
-        this.spawnHookAnchor(450, this.groundReferenceY - 150 - 120);
-        this.spawnHookAnchor(800, this.groundReferenceY - 300 - 120);
-        this.spawnHookAnchor(1150, this.groundReferenceY - 450 - 120);
-        this.spawnHookAnchor(1550, this.groundReferenceY - 650 - 160);
+        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 150, 220);
+        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 160, 240);
+        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 180, 260);
+        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 180, 260);
+        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 220, 320);
     }
 
     private drawQuantumTether(startX: number, startY: number, targetX: number, targetY: number): void {

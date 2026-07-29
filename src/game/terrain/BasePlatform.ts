@@ -42,8 +42,11 @@ export class BasePlatform extends Phaser.GameObjects.Image {
     }
 
     public override destroy(fromScene?: boolean): void {
-        if (this.body) {
-            this.scene.matter.world.remove(this.body);
+        const matterBody = this.body;
+
+        if (matterBody) {
+            this.scene.matter.world.remove(matterBody);
+            this.body = undefined as unknown as MatterJS.BodyType;
         }
 
         super.destroy(fromScene);
