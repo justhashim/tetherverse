@@ -179,12 +179,12 @@ export class GameScene extends Scene {
 
         startPlatform.setDepth(20);
         // Expand width slightly to give a solid base under the player
-        startPlatform.setDisplaySize(100, 40);
+        startPlatform.setDisplaySize(280, 80);
 
         // Get exact platform center
         // const { x: spawnX } = startPlatform.getCenter();
 
-        startPlatform.setOrigin(0.5, 0.5);
+        startPlatform.setOrigin(0.5, 0.35);
 
         const spawnX = startPlatform.x; // Exact center X of the platform body
 
