@@ -27,10 +27,16 @@ export class GameScene extends Scene {
 
     private groundReferenceY: number = 1200;
     private maxAltitudeMeters: number = 0;
+    private currentAltitudeMeters: number = 0; // Live altitude used to pick the difficulty tier
 
     private lastGeneratedX: number = 0;
     private lastGeneratedY: number = 0;
     private runLowestY: number = 0; // Tracks the highest point reached THIS run to move the death-zone up
+
+    // Last platform the player safely settled on (for the checkpoint respawn mechanic).
+    private lastSafeX: number = 0;
+    private lastSafeTopY: number = 0;
+    private hasSafeSpot: boolean = false;
 
     constructor() {
         super("GameScene");
@@ -184,6 +190,12 @@ export class GameScene extends Scene {
         // Store the start platform in the standard array so it is treated uniformly
         this.platforms.push(startPlatform);
 
+        // Record the starting block as the first checkpoint so a fall always has a
+        // safe spot to recover to.
+        this.lastSafeX = spawnX;
+        this.lastSafeTopY = startPlatform.y - (startPlatform.displayHeight / 2);
+        this.hasSafeSpot = true;
+
         // Reset velocity/forces and set initial state so gravity does not yank Jack down
         this.player.updateState("IDLE");
 
@@ -267,6 +279,7 @@ export class GameScene extends Scene {
         this.lastGeneratedX = 1550;
         this.lastGeneratedY = this.groundReferenceY - 650;
         this.runLowestY = this.groundReferenceY;
+        this.currentAltitudeMeters = 0;
     }
 
     update(time: number, delta: number) {
@@ -296,6 +309,10 @@ export class GameScene extends Scene {
         this.settlePlayerIfOnSurface();
 
         if (this.player) {
+            // --- STUCK RECOVERY: never leave the player stranded mid-climb. If unhooked
+            // and well below the last safe platform, warp back to it instead of dying.
+            this.recoverPlayerFromStuck();
+
             // --- FAIL CONDITIONAL CHECK ---
             // If the player falls past the initial base ground zone, execute fail loop
             if (this.player.y > this.groundReferenceY + 400) {
@@ -308,6 +325,8 @@ export class GameScene extends Scene {
                 const pixelHeight = (this.groundReferenceY - this.player.y) - 20;
                 const altitudeMeters = Math.max(0, Math.floor(pixelHeight / 10));
 
+                // Live altitude drives difficulty tier selection and the rising death-zone
+                this.currentAltitudeMeters = altitudeMeters;
                 this.heightText.setText(`Altitude: ${altitudeMeters}m`);
 
                 if (altitudeMeters > this.maxAltitudeMeters) {
@@ -326,27 +345,27 @@ export class GameScene extends Scene {
                 this.runLowestY = this.player.y;
             }
 
-            // Find the absolute lowest platform still alive in the world (always index 0)
+            // --- ANTI-CAMPING RISING VOID ---
+            // The death-zone climbs with your best altitude: the higher you have climbed,
+            // the higher the floor beneath you, so stalling/hovering in low zones is lethal.
+            // Zone-scaled margins stay swing-safe. The speed gate lets a genuine missed
+            // jump (fast fall) through so the checkpoint recovery rescues it instead.
+            const difficultyParams = this.getDifficultyParams();
+            const voidY = this.runLowestY + difficultyParams.voidMargin;
+            const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
+
+            if (this.player.y > voidY && fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) {
+                this.handlePlayerFailure();
+                return;
+            }
+
+            // Fallback for the very beginning of the game (before platforms exist).
+            if (this.player.y > this.groundReferenceY + 400) {
+                this.handlePlayerFailure();
+                return;
+            }
+
             if (this.platforms.length > 0) {
-                // Find the lowest platform, safely skipping any "ghost" undefined array slots
-                const lowestPlatform = this.platforms.find(
-                    p => p && p.active && p.body && p.body.position
-                );
-
-                if (lowestPlatform && lowestPlatform.body && lowestPlatform.body.position) {
-                    const voidY = lowestPlatform.y ?? this.groundReferenceY;
-
-                    // You ONLY die if you fall 300px past the lowest existing platform
-                    if (voidY !== undefined && this.player.y > voidY + 300) {
-                        this.handlePlayerFailure();
-                        return;
-                    }
-                } else if (this.player.y > this.groundReferenceY + 400) {
-                    // Fallback for the very beginning of the game
-                    this.handlePlayerFailure();
-                    return;
-                }
-
                 // --- ENDLESS GENERATION & CULLING ---
                 // If the player gets within 1000px of the last generated platform, spawn a new one
                 if (this.player.y - 1000 < this.lastGeneratedY) {
@@ -459,22 +478,21 @@ export class GameScene extends Scene {
             const velocity = this.player.body.velocity;
             const speed = Math.hypot(velocity.x, velocity.y);
 
-            // Only settle when near-rest so we never snap to IDLE (zeroing momentum)
-            // while airborne — e.g. crossing a platform top mid-swing at speed.
-            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < 1.5) {
+            // Landing assist: settle whenever descending onto the platform top at a
+            // landable speed (LAUNCHED is excluded above, so this never interrupts a
+            // real swing). Sticks the landing instead of sliding off the small ledge.
+            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) {
 
-                // Grounded stability: zero out tiny micro-bounce velocities so the
-                // body settles on the platform instead of micro-bouncing.
-                if (Math.abs(velocity.y) < 0.2) {
-                    this.matter.body.setVelocity(this.player.body, { x: velocity.x, y: 0 });
-                }
-
-                if (this.player.playerState === "IDLE") {
-                    const current = this.player.body.velocity;
-                    this.matter.body.setVelocity(this.player.body, { x: 0, y: current.y });
-                }
+                // Fully stop the body so the landing holds.
+                this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
+                this.matter.body.setAngularVelocity(this.player.body, 0);
 
                 this.player.updateState("IDLE");
+
+                // Record this platform as the latest checkpoint.
+                this.lastSafeX = platform.body.position.x;
+                this.lastSafeTopY = platformTop;
+                this.hasSafeSpot = true;
                 return;
             }
         }
@@ -565,6 +583,32 @@ export class GameScene extends Scene {
         object.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 
+    private recoverPlayerFromStuck(): void {
+        if (!this.hasSafeSpot) return;
+        if (this.pivotEngine?.isCurrentlyHooked()) return;
+
+        // Only recover when the player has genuinely fallen far below the last safe
+        // landing spot (and hasn't already been recovered this far below it).
+        if (this.player.y <= this.lastSafeTopY + GAME_CONSTANTS.CHECKPOINT.RESPAWN_FALL_DISTANCE) {
+            return;
+        }
+
+        // Respawn on the last safe platform with zero velocity/forces.
+        this.matter.body.setPosition(this.player.body, {
+            x: this.lastSafeX,
+            y: this.lastSafeTopY - GAME_CONSTANTS.PLAYER.RADIUS
+        });
+        this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
+        this.matter.body.setAngularVelocity(this.player.body, 0);
+
+        const body = this.player.body as MatterJS.BodyType;
+        body.force.x = 0;
+        body.force.y = 0;
+        body.torque = 0;
+
+        this.player.updateState("IDLE");
+    }
+
     private handlePlayerFailure() {
         // 1. Capture and save the high score immediately before anything is destroyed
         if (this.maxAltitudeMeters) {
@@ -581,34 +625,66 @@ export class GameScene extends Scene {
         this.scene.restart();
     }
     private generateNextPlatform() {
-        const maxJackReach = 280; // Slightly under your 300px max to guarantee it is reachable
+        const proc = GAME_CONSTANTS.PROCEDURAL;
+        const diff = this.getDifficultyParams();
 
-        // Randomize the vertical jump distance (climbing between 80px and 180px higher)
-        const deltaY = Phaser.Math.Between(-180, -80);
+        // Always climb toward the right: a guaranteed forward gap so platforms never
+        // overlap or drift into unreachable territory behind the player.
+        const deltaX = Phaser.Math.Between(diff.gapMin, diff.gapMax);
+        let nextX = Phaser.Math.Clamp(this.lastGeneratedX + deltaX, 0, proc.MAX_WORLD_X);
 
-        // Pythagorean Theorem to find the maximum safe horizontal distance
-        const maxDeltaX = Math.sqrt(Math.pow(maxJackReach, 2) - Math.pow(deltaY, 2));
-        const deltaX = Phaser.Math.Between(-maxDeltaX, maxDeltaX);
+        // Steady climb upward (upper Y is smaller).
+        const deltaY = Phaser.Math.Between(diff.stepMin, diff.stepMax);
+        const nextY = this.lastGeneratedY - deltaY;
 
-        let nextX = this.lastGeneratedX + deltaX;
-        const nextY = this.lastGeneratedY + deltaY;
+        // MIN-DISTANCE GUARD: never place a new platform too close to the previous one,
+        // even after a tight clamp, so platforms can never overlap/stack on a column.
+        const distance = Phaser.Math.Distance.Between(this.lastGeneratedX, this.lastGeneratedY, nextX, nextY);
+        if (distance < proc.MIN_PLATFORM_DIST) {
+            nextX = Phaser.Math.Clamp(nextX + (proc.MIN_PLATFORM_DIST - distance) + Phaser.Math.Between(20, 60), 0, proc.MAX_WORLD_X);
+        }
 
-        // Clamp X so the mountain doesn't drift infinitely left or right off into the void
-        nextX = Phaser.Math.Clamp(nextX, 0, 3000);
-
-        // Randomize the visual shape
-        const width = Phaser.Math.Between(80, 200);
+        // Difficulty-scaled visual shape (narrower as altitude rises)
+        const width = Phaser.Math.Between(diff.widthMin, diff.widthMax);
         const height = Phaser.Math.Between(30, 60);
 
         const p = new BasePlatform(this, nextX, nextY, width, height, { friction: 0.9, restitution: 0.05 });
         this.platforms.push(p);
-        const horizontalOffset = Math.max(240, width + 120);
-        const ropeLength = horizontalOffset + Phaser.Math.Between(120, 180);
-        this.spawnTopRightHookAnchor(nextX, nextY, horizontalOffset, ropeLength);
+
+        // Anchor in the GAP between the previous and this platform so there is always
+        // a clear, diagonal swing trajectory over the gap. Higher tiers offset the
+        // anchor from the gap midpoint so the release must be precise to connect.
+        const gapMidX = (this.lastGeneratedX + nextX) / 2 + diff.anchorXOffset;
+        const gapBaselineY = (this.lastGeneratedY + nextY) / 2;
+        let anchorY = gapBaselineY - Phaser.Math.Between(diff.anchorLiftMin, diff.anchorLiftMax);
+
+        // Guarantee the anchor stays within tether reach of the previous platform so
+        // the swing is always usable (never an awkward angle or impossible distance).
+        const dxFromPrevious = Math.abs(gapMidX - this.lastGeneratedX);
+        const maxAnchorDy = Math.sqrt(Math.max(0, proc.MAX_REACH * proc.MAX_REACH - dxFromPrevious * dxFromPrevious));
+        anchorY = Math.max(anchorY, this.lastGeneratedY - maxAnchorDy);
+
+        this.spawnHookAnchor(gapMidX, anchorY);
 
         // Update the trackers for the next loop
         this.lastGeneratedX = nextX;
         this.lastGeneratedY = nextY;
+    }
+
+    // Returns the difficulty parameter block matching the player's current altitude so
+    // the climb progressively tightens: gaps grow, platforms narrow, anchors lift and
+    // shift off-center, and the death-void margin shrinks.
+    private getDifficultyParams() {
+        const difficulty = GAME_CONSTANTS.DIFFICULTY;
+        const altitude = this.currentAltitudeMeters;
+
+        if (altitude >= GAME_CONSTANTS.ALTITUDE.MASTERY_ZONE) {
+            return difficulty.MASTERY;
+        }
+        if (altitude >= GAME_CONSTANTS.ALTITUDE.COMPETITIVE_ZONE) {
+            return difficulty.COMPETITIVE;
+        }
+        return difficulty.WARMUP;
     }
 
     private cleanupOldPlatforms() {

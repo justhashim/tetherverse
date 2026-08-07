@@ -3,6 +3,7 @@
 import Phaser from "phaser";
 import { Player } from "../entities/Player";
 import { COLLISION_CHANNELS } from "../config/physics-channels";
+import { GAME_CONSTANTS } from "../config/game-constants";
 
 export class PivotEngine {
     private scene: Phaser.Scene;
@@ -97,7 +98,7 @@ export class PivotEngine {
                 aimedAnchor.position.x,
                 aimedAnchor.position.y
             ),
-            0.2,
+            GAME_CONSTANTS.SWING.CONSTRAINT_STIFFNESS,
             {
                 pointA: { x: 0, y: 0 },
                 pointB: { x: 0, y: 0 }
@@ -144,7 +145,7 @@ export class PivotEngine {
             );
             const tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
 
-            const driveForce = 0.12; // Swing acceleration pump while holding (was 0.01, far too weak)
+            const driveForce = GAME_CONSTANTS.SWING.DRIVE_FORCE;
 
             this.scene.matter.body.applyForce(
                 this.player.body,
@@ -179,12 +180,25 @@ export class PivotEngine {
         }
 
         // Boost the built-up swing velocity so releasing actually flings the player
-        // toward the next platform ("Release to LAUNCH!").
-        const launchBoost = 1.3;
-        this.scene.matter.body.setVelocity(this.player.body, {
-            x: swingVelocity.x * launchBoost,
-            y: swingVelocity.y * launchBoost
-        });
+        // toward the next platform ("Release to LAUNCH!"), then clamp to a controlled
+        // max so Jack never shoots off the screen.
+        const boostedX = swingVelocity.x * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
+        const boostedY = swingVelocity.y * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
+        const boostedSpeed = Math.hypot(boostedX, boostedY);
+        const maxSpeed = GAME_CONSTANTS.LAUNCH.MAX_LAUNCH_SPEED;
+
+        if (boostedSpeed > maxSpeed && boostedSpeed > 0) {
+            const scale = maxSpeed / boostedSpeed;
+            this.scene.matter.body.setVelocity(this.player.body, {
+                x: boostedX * scale,
+                y: boostedY * scale
+            });
+        } else {
+            this.scene.matter.body.setVelocity(this.player.body, {
+                x: boostedX,
+                y: boostedY
+            });
+        }
 
         this.player.updateState("FALLING");
     }

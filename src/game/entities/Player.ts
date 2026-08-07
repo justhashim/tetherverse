@@ -66,6 +66,15 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.playerState = newState;
         this.stop();
 
+        // Per-state air drag for controlled, punchy movement.
+        if (newState === "LAUNCHED") {
+            this.body.frictionAir = GAME_CONSTANTS.SWING.FRICTION_AIR;
+        } else if (newState === "FALLING") {
+            this.body.frictionAir = GAME_CONSTANTS.SWING.FALLING_FRICTION_AIR;
+        } else {
+            this.body.frictionAir = GAME_CONSTANTS.PLAYER.FRICTION_AIR;
+        }
+
         if (newState === "IDLE") {
             this.scene.matter.body.setVelocity(this.body, { x: 0, y: 0 });
             this.scene.matter.body.setAngularVelocity(this.body, 0);
