@@ -163,43 +163,28 @@ export class GameScene extends Scene {
         const standardProps = { friction: 0.9, restitution: 0.05 };
 
         // 1. Center starting platform at x = 250 (directly in line with tutorial lane)
-        const platformX = 400;
+        const platformX = 250;
         const platformY = this.groundReferenceY + 20;
 
-        const startPlatform = this.matter.add.image(
-            platformX,
-            platformY,
-            "multiverse_platform",
-            undefined,
-            {
-                isStatic: true,
-                label: "Platform",
-            }
-        );
-
-        startPlatform.setDepth(20);
-        // Expand width slightly to give a solid base under the player
-        startPlatform.setDisplaySize(280, 80);
-
-        // Get exact platform center
-        // const { x: spawnX } = startPlatform.getCenter();
-
-        startPlatform.setOrigin(0.5, 0.35);
+        // Standardize all terrain as BasePlatform (visual = 280x80, matching the old sprite)
+        const startPlatform = new BasePlatform(this, platformX, platformY, 140, 40, standardProps);
 
         const spawnX = startPlatform.x; // Exact center X of the platform body
 
-        // Create player centered on platform
-        this.player = new Player(this, spawnX, 0);
-
-        // Position player directly on top of the platform top edge
+        // Compute the surface spawn point BEFORE instantiating the player so it never
+        // starts at Y=0 and drops from the sky on frame 1.
         const spawnY =
             startPlatform.y -
             (startPlatform.displayHeight / 2) -
             GAME_CONSTANTS.PLAYER.RADIUS;
 
-        this.player.setPosition(spawnX, spawnY);
+        // Create player centered directly on the platform's top surface
+        this.player = new Player(this, spawnX, spawnY);
 
-        // Reset velocity and set initial state
+        // Store the start platform in the standard array so it is treated uniformly
+        this.platforms.push(startPlatform);
+
+        // Reset velocity/forces and set initial state so gravity does not yank Jack down
         this.player.updateState("IDLE");
 
         this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
@@ -226,7 +211,7 @@ export class GameScene extends Scene {
             color: "#00ffcc",
             stroke: "#000000",
             strokeThickness: 4
-        });
+        }).setDepth(60);
 
         this.add.text(440, this.groundReferenceY - 210, "↓", {
             fontSize: "24px",
@@ -234,7 +219,7 @@ export class GameScene extends Scene {
             color: "#00ffcc",
             stroke: "#000000",
             strokeThickness: 4
-        });
+        }).setDepth(60);
 
         this.add.text(350, this.groundReferenceY - 50, "2. Keep holding to swing\n3. Release to LAUNCH!", {
             fontSize: "18px",
@@ -243,7 +228,7 @@ export class GameScene extends Scene {
             align: "center",
             stroke: "#000000",
             strokeThickness: 3
-        });
+        }).setDepth(60);
 
         // Spacing out the rest of the mountain to catch your launch
         this.platforms.push(
@@ -412,23 +397,27 @@ export class GameScene extends Scene {
         const maxScreenX = 350;
         const screenX = this.player.x - this.cameras.main.scrollX;
 
+        const velocity = this.player.body.velocity;
+
         if (screenX >= minScreenX && screenX <= maxScreenX) {
+            // In-lane & grounded: cancel horizontal velocity unconditionally so spawn
+            // micro-jitter can never accumulate and slide the body off the platform.
+            if (this.player.playerState === "IDLE") {
+                this.matter.body.setVelocity(this.player.body, { x: 0, y: velocity.y });
+            }
             return;
         }
 
+        // Out-of-lane: gently nudge velocity back toward the lane edge instead of
+        // hard-snapping position, so Matter's solver stays in control (no jitter).
         const targetScreenX = screenX < minScreenX ? minScreenX : maxScreenX;
         const targetWorldX = this.cameras.main.scrollX + targetScreenX;
+        const dxFromTarget = targetWorldX - this.player.body.position.x;
+        const correction = Phaser.Math.Clamp(dxFromTarget * 0.05, -6, 6);
 
-        this.matter.body.setPosition(this.player.body, {
-            x: targetWorldX,
-            y: this.player.body.position.y
-        });
-
-        const currentVelocity = this.player.body.velocity;
-        const clampedVelocityX = Math.abs(currentVelocity.x) > 0.1 ? 0 : currentVelocity.x;
         this.matter.body.setVelocity(this.player.body, {
-            x: clampedVelocityX,
-            y: currentVelocity.y
+            x: velocity.x + correction,
+            y: velocity.y
         });
     }
 
@@ -466,6 +455,19 @@ export class GameScene extends Scene {
             const withinHorizontalBounds = playerX >= platformLeft && playerX <= platformRight;
 
             if (withinSurfaceBand && withinHorizontalBounds && this.player.body.velocity.y >= 0) {
+                const velocity = this.player.body.velocity;
+
+                // Grounded stability: zero out tiny micro-bounce velocities so the
+                // body settles on the platform instead of micro-bouncing.
+                if (Math.abs(velocity.y) < 0.2) {
+                    this.matter.body.setVelocity(this.player.body, { x: velocity.x, y: 0 });
+                }
+
+                if (this.player.playerState === "IDLE") {
+                    const current = this.player.body.velocity;
+                    this.matter.body.setVelocity(this.player.body, { x: 0, y: current.y });
+                }
+
                 this.player.updateState("IDLE");
                 return;
             }

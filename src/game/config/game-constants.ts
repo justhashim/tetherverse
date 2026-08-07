@@ -5,7 +5,7 @@ export const GAME_CONSTANTS = {
         FRICTION: 0.1,
         FRICTION_STATIC: 0.5,
         FRICTION_AIR: 0.05,
-        BOUNCE: 0.2,    // Restitution
+        BOUNCE: 0,      // Restitution (0 so Jack settles without bouncing off surfaces)
     },
     LAUNCH: {
         MIN_DRAG_DISTANCE: 15,  // Pixels required to initiate an intentional launch drag

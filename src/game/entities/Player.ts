@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_CONSTANTS } from "../config/game-constants";
+import { COLLISION_CHANNELS } from "../config/physics-channels";
 
 export type PlayerState = "IDLE" | "AIMING" | "LAUNCHED" | "FALLING";
 
@@ -40,10 +41,18 @@ export class Player extends Phaser.GameObjects.Sprite {
             frictionStatic: GAME_CONSTANTS.PLAYER.FRICTION_STATIC,
             frictionAir: GAME_CONSTANTS.PLAYER.FRICTION_AIR,
             restitution: GAME_CONSTANTS.PLAYER.BOUNCE,
-            label: "PlayerBody"
+            label: "PlayerBody",
+            collisionFilter: {
+                category: COLLISION_CHANNELS.PLAYER,
+                mask: 0xFFFFFFFF
+            }
         };
 
         scene.matter.add.gameObject(this, targetConfig);
+
+        // Lock rotation by giving the body infinite rotational inertia. This is how
+        // matter-js implements a "fixed rotation" so the body settles on platforms
+        // without micro-bouncing (setFixedRotation is not exposed in this version).
         this.scene.matter.body.setInertia(this.body, Infinity);
 
         // --- 4. SAFE ANIMATION TRIGGER ---
