@@ -204,22 +204,24 @@ export class GameScene extends Scene {
             new BasePlatform(this, 450, this.groundReferenceY - 150, 120, 40, standardProps)
         );
 
-        // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly
-        this.add.text(250, this.groundReferenceY - 230, "1. Tap & HOLD here to Hook", {
+        // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly.
+        // Positioned directly above the first hook node (~460, 953) so the hint
+        // truly points at the tappable anchor.
+        this.add.text(460, this.groundReferenceY - 330, "1. Tap & HOLD here to Hook", {
             fontSize: "24px",
             fontFamily: "monospace",
             color: "#00ffcc",
             stroke: "#000000",
             strokeThickness: 4
-        }).setDepth(60);
+        }).setOrigin(0.5, 0.5).setDepth(60);
 
-        this.add.text(440, this.groundReferenceY - 210, "↓", {
+        this.add.text(460, this.groundReferenceY - 300, "↓", {
             fontSize: "24px",
             fontFamily: "monospace",
             color: "#00ffcc",
             stroke: "#000000",
             strokeThickness: 4
-        }).setDepth(60);
+        }).setOrigin(0.5, 0.5).setDepth(60);
 
         this.add.text(350, this.groundReferenceY - 50, "2. Keep holding to swing\n3. Release to LAUNCH!", {
             fontSize: "18px",
@@ -385,7 +387,7 @@ export class GameScene extends Scene {
         this.hookNodes.forEach(node => node.destroy());
         this.hookNodes = [];
 
-        this.spawnTopRightHookAnchor(200, this.groundReferenceY + 20, 260, 380);
+        this.spawnTopRightHookAnchor(250, this.groundReferenceY + 20, 210, 340);
         this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 280, 410);
         this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 300, 440);
         this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 320, 470);

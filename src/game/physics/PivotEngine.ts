@@ -13,8 +13,8 @@ export class PivotEngine {
     private pointerVector: Phaser.Math.Vector2;
 
     private isHooked: boolean = false;
-    private jackLength: number = 300; // Set to 300 so you can comfortably reach the first platform
-    private anchorHitRadius: number = 40;
+    private jackLength: number = 340; // Comfortably reaches the first anchor from the start platform
+    private anchorHitRadius: number = 60; // Forgiving tap detection near the hook node
     private debugGraphics: Phaser.GameObjects.Graphics;
 
     constructor(scene: Phaser.Scene, player: Player) {
