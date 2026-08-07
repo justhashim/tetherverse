@@ -144,7 +144,7 @@ export class PivotEngine {
             );
             const tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
 
-            const driveForce = 0.01; // Adjust this value to control swing acceleration
+            const driveForce = 0.12; // Swing acceleration pump while holding (was 0.01, far too weak)
 
             this.scene.matter.body.applyForce(
                 this.player.body,
@@ -169,12 +169,22 @@ export class PivotEngine {
     private releaseAnchor(): void {
         if (!this.isHooked) return;
 
+        const swingVelocity = this.player.body.velocity;
+
         this.isHooked = false;
         this.anchorPoint.set(0, 0);
         if (this.pivotConstraint) {
             this.scene.matter.world.remove(this.pivotConstraint);
             this.pivotConstraint = null;
         }
+
+        // Boost the built-up swing velocity so releasing actually flings the player
+        // toward the next platform ("Release to LAUNCH!").
+        const launchBoost = 1.3;
+        this.scene.matter.body.setVelocity(this.player.body, {
+            x: swingVelocity.x * launchBoost,
+            y: swingVelocity.y * launchBoost
+        });
 
         this.player.updateState("FALLING");
     }

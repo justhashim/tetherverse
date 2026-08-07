@@ -207,7 +207,7 @@ export class GameScene extends Scene {
         // IN-WORLD TUTORIAL TEXT: Guides the player's eyes and actions perfectly.
         // Positioned directly above the first hook node (~460, 953) so the hint
         // truly points at the tappable anchor.
-        this.add.text(460, this.groundReferenceY - 330, "1. Tap & HOLD here to Hook", {
+        this.add.text(390, this.groundReferenceY - 330, "1. Tap & HOLD here to Hook", {
             fontSize: "24px",
             fontFamily: "monospace",
             color: "#00ffcc",
@@ -215,7 +215,7 @@ export class GameScene extends Scene {
             strokeThickness: 4
         }).setOrigin(0.5, 0.5).setDepth(60);
 
-        this.add.text(460, this.groundReferenceY - 300, "↓", {
+        this.add.text(390, this.groundReferenceY - 290, "↓", {
             fontSize: "24px",
             fontFamily: "monospace",
             color: "#00ffcc",
@@ -387,7 +387,7 @@ export class GameScene extends Scene {
         this.hookNodes.forEach(node => node.destroy());
         this.hookNodes = [];
 
-        this.spawnTopRightHookAnchor(250, this.groundReferenceY + 20, 210, 340);
+        this.spawnTopRightHookAnchor(250, this.groundReferenceY + 20, 140, 300);
         this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 280, 410);
         this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 300, 440);
         this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 320, 470);
@@ -437,7 +437,7 @@ export class GameScene extends Scene {
     }
 
     private settlePlayerIfOnSurface(): void {
-        if (!this.player || this.player.playerState === "AIMING") {
+        if (!this.player || this.player.playerState === "AIMING" || this.player.playerState === "LAUNCHED") {
             return;
         }
 
@@ -456,8 +456,12 @@ export class GameScene extends Scene {
             const withinSurfaceBand = playerBottom >= platformTop - 2 && playerBottom <= platformTop + 8;
             const withinHorizontalBounds = playerX >= platformLeft && playerX <= platformRight;
 
-            if (withinSurfaceBand && withinHorizontalBounds && this.player.body.velocity.y >= 0) {
-                const velocity = this.player.body.velocity;
+            const velocity = this.player.body.velocity;
+            const speed = Math.hypot(velocity.x, velocity.y);
+
+            // Only settle when near-rest so we never snap to IDLE (zeroing momentum)
+            // while airborne — e.g. crossing a platform top mid-swing at speed.
+            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < 1.5) {
 
                 // Grounded stability: zero out tiny micro-bounce velocities so the
                 // body settles on the platform instead of micro-bouncing.
