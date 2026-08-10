@@ -3,13 +3,13 @@ import { Player } from "../entities/Player";
 import { GAME_CONSTANTS } from "../config/game-constants";
 import { BasePlatform } from "../terrain/BasePlatform";
 import { PivotEngine } from "../physics/PivotEngine";
-import { COLLISION_CHANNELS } from "../config/physics-channels";
+import { LevelGenerator } from "../levels/LevelGenerator";
 
 export class GameScene extends Scene {
     private player!: Player;
     private pivotEngine!: PivotEngine;
+    private levelGenerator!: LevelGenerator;
     private platforms: BasePlatform[] = [];
-    private hookNodes: Phaser.Physics.Matter.Image[] = [];
     private backgroundLayer!: Phaser.GameObjects.TileSprite;
     private backgroundObjects: Phaser.GameObjects.Image[] = [];
     private tetherGraphics!: Phaser.GameObjects.Graphics;
@@ -28,18 +28,12 @@ export class GameScene extends Scene {
     private groundReferenceY: number = 1200;
     private maxAltitudeMeters: number = 0;
     private currentAltitudeMeters: number = 0; // Live altitude used to pick the difficulty tier
+    private levelSeed: number = 0;
 
-    private lastGeneratedX: number = 0;
-    private lastGeneratedY: number = 0;
     private runLowestY: number = 0; // Tracks the highest point reached THIS run to move the death-zone up
 
     private isGameOver: boolean = false;
     private campGraceTimer: number = 0; // Accumulated ms spent resting below the death-void
-
-    // Last platform the player safely settled on (for the checkpoint respawn mechanic).
-    private lastSafeX: number = 0;
-    private lastSafeTopY: number = 0;
-    private hasSafeSpot: boolean = false;
 
     constructor() {
         super("GameScene");
@@ -56,7 +50,7 @@ export class GameScene extends Scene {
                     this.maxAltitudeMeters = parsed;
                 }
             }
-        } catch (e) {
+        } catch {
             // Silently ignore
         }
 
@@ -124,7 +118,6 @@ export class GameScene extends Scene {
 
         this.seedBackgroundObjects();
 
-        this.matter.world.setBounds(0, -100000, 20000, 100000 + this.groundReferenceY);
         this.matter.world.setGravity(0, 1.4);
 
         this.tetherGraphics = this.add.graphics();
@@ -133,11 +126,13 @@ export class GameScene extends Scene {
         // Inside src/game/scenes/GameScene.ts -> create()
 
         if (!this.anims.exists('hero_idle')) {
-            // Row 1: Standing Idle (Frames 0 to 4)
+            // Row 1: Subtle 2-frame breathing idle (frames 1-2). Frames 0 and 3-4 in the
+            // sheet are not center-aligned with the rest of the row, so looping the full
+            // row makes the sprite visibly slide/hop; frames 1-2 share the same baseline.
             this.anims.create({
                 key: 'hero_idle',
-                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 0, end: 4 }),
-                frameRate: 8,
+                frames: this.anims.generateFrameNumbers('hero_sheet', { start: 1, end: 2 }),
+                frameRate: 2,
                 repeat: -1
             });
 
@@ -192,12 +187,6 @@ export class GameScene extends Scene {
 
         // Store the start platform in the standard array so it is treated uniformly
         this.platforms.push(startPlatform);
-
-        // Record the starting block as the first checkpoint so a fall always has a
-        // safe spot to recover to.
-        this.lastSafeX = spawnX;
-        this.lastSafeTopY = startPlatform.y - (startPlatform.displayHeight / 2);
-        this.hasSafeSpot = true;
 
         // Reset velocity/forces and set initial state so gravity does not yank Jack down
         this.player.updateState("IDLE");
@@ -258,7 +247,18 @@ export class GameScene extends Scene {
             new BasePlatform(this, 1550, this.groundReferenceY - 650, 200, 150, standardProps)
         );
 
-        this.seedHookNodes();
+        // --- INFINITE PROCEDURAL LEVEL GENERATOR ---
+        // Handcrafted intro above; from here-on the world is generated forever.
+        // The generator owns `this.platforms` (shared reference) and seeds the
+        // tutorial hook anchors, keeping culling and reachability in one place.
+        this.levelSeed = this.generateLevelSeed();
+        this.levelGenerator = new LevelGenerator(
+            this,
+            this.platforms,
+            this.levelSeed,
+            this.groundReferenceY
+        );
+        this.levelGenerator.seedTutorialHooks();
 
         // --- CAMERA SETUP ---
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -276,11 +276,8 @@ export class GameScene extends Scene {
             fontSize: "18px",
             fontFamily: "monospace",
             color: "#FF0000"
-        }).setScrollFactor(0);;
+        }).setScrollFactor(0);
 
-        // Initialize the last generated platform coordinates to the position of the last hardcoded platform
-        this.lastGeneratedX = 1550;
-        this.lastGeneratedY = this.groundReferenceY - 650;
         this.runLowestY = this.groundReferenceY;
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
@@ -295,10 +292,6 @@ export class GameScene extends Scene {
         // Update the pivot engine routines
         if (this.pivotEngine) {
             this.pivotEngine.updateEngineRoutines();
-        }
-
-        if (this.player) {
-            this.constrainPlayerToLeftLane();
         }
 
         const activeAnchor = this.pivotEngine?.getActiveAnchorPoint();
@@ -316,10 +309,6 @@ export class GameScene extends Scene {
         this.settlePlayerIfOnSurface();
 
         if (this.player) {
-            // --- STUCK RECOVERY: never leave the player stranded mid-climb. If unhooked
-            // and well below the last safe platform, warp back to it instead of dying.
-            this.recoverPlayerFromStuck();
-
             // --- FAIL CONDITIONAL CHECK ---
             // If the player falls past the initial base ground zone, execute fail loop
             if (this.player.y > this.groundReferenceY + 400) {
@@ -357,15 +346,12 @@ export class GameScene extends Scene {
             // resting (slow) long enough to have no recovery path left. Hooking, moving,
             // or sitting above the lowest platform always resets the countdown, so the
             // player is never killed mid-swing or with a platform within landing reach.
-            const difficultyParams = this.getDifficultyParams();
             const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
-            const lowestAlive = this.platforms.find(
-                p => p && p.active && p.body && p.body.position
-            );
+            const lowestAlive = this.levelGenerator.getLowestPlatformBelow(this.player.y);
 
             let belowVoidAndIdle = false;
-            if (lowestAlive && lowestAlive.body && lowestAlive.body.position) {
-                const voidY = lowestAlive.y + difficultyParams.voidMargin;
+            if (lowestAlive) {
+                const voidY = lowestAlive.y + this.levelGenerator.voidMargin;
                 belowVoidAndIdle =
                     !this.pivotEngine?.isCurrentlyHooked() &&
                     this.player.y > voidY &&
@@ -382,87 +368,11 @@ export class GameScene extends Scene {
                 this.campGraceTimer = 0;
             }
 
-            // Fallback for the very beginning of the game (before platforms exist).
-            if (this.player.y > this.groundReferenceY + 400) {
-                this.handlePlayerFailure();
-                return;
-            }
-
-            if (this.platforms.length > 0) {
-                // --- ENDLESS GENERATION & CULLING ---
-                // If the player gets within 1000px of the last generated platform, spawn a new one
-                if (this.player.y - 1000 < this.lastGeneratedY) {
-                    this.generateNextPlatform();
-                }
-
-                // Clean up old platforms far below the player to save mobile memory
-                this.cleanupOldPlatforms();
-            }
+            // --- ENDLESS GENERATION & CULLING ---
+            // Generate ahead of Jack and prune geometry far behind him. Generation is
+            // fully validated (reachable/hookable/overlap/dead-end) and capped per frame.
+            this.levelGenerator.update(this.player.x, this.player.y, this.currentAltitudeMeters);
         }
-    }
-
-    private spawnTopRightHookAnchor(platformX: number, platformY: number, horizontalOffset: number, ropeLength: number): void {
-        const verticalOffset = Math.sqrt(Math.max(0, (ropeLength * ropeLength) - (horizontalOffset * horizontalOffset)));
-        const anchorX = platformX + horizontalOffset;
-        const anchorY = platformY - verticalOffset;
-
-        this.spawnHookAnchor(anchorX, anchorY);
-    }
-
-    private spawnHookAnchor(x: number, y: number): void {
-        const node = this.matter.add.image(x, y, 'hook_node', undefined, {
-            isStatic: true,
-            isSensor: true,
-            label: 'HookAnchor',
-            collisionFilter: {
-                category: COLLISION_CHANNELS.HOOK_NODE,
-                mask: 0
-            }
-        });
-
-        node.setDisplaySize(80, 80);
-        node.setDepth(20);
-        this.hookNodes.push(node);
-    }
-
-    private seedHookNodes(): void {
-        this.hookNodes.forEach(node => node.destroy());
-        this.hookNodes = [];
-
-        this.spawnTopRightHookAnchor(250, this.groundReferenceY + 20, 140, 300);
-        this.spawnTopRightHookAnchor(450, this.groundReferenceY - 150, 280, 410);
-        this.spawnTopRightHookAnchor(800, this.groundReferenceY - 300, 300, 440);
-        this.spawnTopRightHookAnchor(1150, this.groundReferenceY - 450, 320, 470);
-        this.spawnTopRightHookAnchor(1550, this.groundReferenceY - 650, 340, 500);
-    }
-
-    private constrainPlayerToLeftLane(): void {
-        const minScreenX = 100;
-        const maxScreenX = 350;
-        const screenX = this.player.x - this.cameras.main.scrollX;
-
-        const velocity = this.player.body.velocity;
-
-        if (screenX >= minScreenX && screenX <= maxScreenX) {
-            // In-lane & grounded: cancel horizontal velocity unconditionally so spawn
-            // micro-jitter can never accumulate and slide the body off the platform.
-            if (this.player.playerState === "IDLE") {
-                this.matter.body.setVelocity(this.player.body, { x: 0, y: velocity.y });
-            }
-            return;
-        }
-
-        // Out-of-lane: gently nudge velocity back toward the lane edge instead of
-        // hard-snapping position, so Matter's solver stays in control (no jitter).
-        const targetScreenX = screenX < minScreenX ? minScreenX : maxScreenX;
-        const targetWorldX = this.cameras.main.scrollX + targetScreenX;
-        const dxFromTarget = targetWorldX - this.player.body.position.x;
-        const correction = Phaser.Math.Clamp(dxFromTarget * 0.05, -6, 6);
-
-        this.matter.body.setVelocity(this.player.body, {
-            x: velocity.x + correction,
-            y: velocity.y
-        });
     }
 
     private drawQuantumTether(startX: number, startY: number, targetX: number, targetY: number): void {
@@ -511,11 +421,6 @@ export class GameScene extends Scene {
                 this.matter.body.setAngularVelocity(this.player.body, 0);
 
                 this.player.updateState("IDLE");
-
-                // Record this platform as the latest checkpoint.
-                this.lastSafeX = platform.body.position.x;
-                this.lastSafeTopY = platformTop;
-                this.hasSafeSpot = true;
                 return;
             }
         }
@@ -606,37 +511,6 @@ export class GameScene extends Scene {
         object.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 
-    private recoverPlayerFromStuck(): void {
-        if (!this.hasSafeSpot) return;
-        if (this.pivotEngine?.isCurrentlyHooked()) return;
-
-        // Only rescue a genuine fast fall. A slow rester below the void is handled by
-        // the death-void countdown instead of being warped back (anti-camp safety).
-        const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
-        if (fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) return;
-
-        // Only recover when the player has genuinely fallen far below the last safe
-        // landing spot (and hasn't already been recovered this far below it).
-        if (this.player.y <= this.lastSafeTopY + GAME_CONSTANTS.CHECKPOINT.RESPAWN_FALL_DISTANCE) {
-            return;
-        }
-
-        // Respawn on the last safe platform with zero velocity/forces.
-        this.matter.body.setPosition(this.player.body, {
-            x: this.lastSafeX,
-            y: this.lastSafeTopY - GAME_CONSTANTS.PLAYER.RADIUS
-        });
-        this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
-        this.matter.body.setAngularVelocity(this.player.body, 0);
-
-        const body = this.player.body as MatterJS.BodyType;
-        body.force.x = 0;
-        body.force.y = 0;
-        body.torque = 0;
-
-        this.player.updateState("IDLE");
-    }
-
     private handlePlayerFailure() {
         if (this.isGameOver) return;
         this.isGameOver = true;
@@ -670,99 +544,10 @@ export class GameScene extends Scene {
             }));
         }
     }
-    private generateNextPlatform() {
-        const proc = GAME_CONSTANTS.PROCEDURAL;
-        const diff = this.getDifficultyParams();
-
-        // Always climb toward the right: a guaranteed forward gap so platforms never
-        // overlap or drift into unreachable territory behind the player.
-        const deltaX = Phaser.Math.Between(diff.gapMin, diff.gapMax);
-        let nextX = Phaser.Math.Clamp(this.lastGeneratedX + deltaX, 0, proc.MAX_WORLD_X);
-
-        // Steady climb upward (upper Y is smaller).
-        const deltaY = Phaser.Math.Between(diff.stepMin, diff.stepMax);
-        const nextY = this.lastGeneratedY - deltaY;
-
-        // MIN-DISTANCE GUARD: never place a new platform too close to the previous one,
-        // even after a tight clamp, so platforms can never overlap/stack on a column.
-        const distance = Phaser.Math.Distance.Between(this.lastGeneratedX, this.lastGeneratedY, nextX, nextY);
-        if (distance < proc.MIN_PLATFORM_DIST) {
-            nextX = Phaser.Math.Clamp(nextX + (proc.MIN_PLATFORM_DIST - distance) + Phaser.Math.Between(20, 60), 0, proc.MAX_WORLD_X);
-        }
-
-        // Difficulty-scaled visual shape (narrower as altitude rises)
-        const width = Phaser.Math.Between(diff.widthMin, diff.widthMax);
-        const height = Phaser.Math.Between(30, 60);
-
-        const p = new BasePlatform(this, nextX, nextY, width, height, { friction: 0.9, restitution: 0.05 });
-        this.platforms.push(p);
-
-        // Anchor in the GAP between the previous and this platform so there is always
-        // a clear, diagonal swing trajectory over the gap. Higher tiers offset the
-        // anchor from the gap midpoint so the release must be precise to connect.
-        const gapMidX = (this.lastGeneratedX + nextX) / 2 + diff.anchorXOffset;
-        const gapBaselineY = (this.lastGeneratedY + nextY) / 2;
-        let anchorY = gapBaselineY - Phaser.Math.Between(diff.anchorLiftMin, diff.anchorLiftMax);
-
-        // Guarantee the anchor stays within tether reach of the previous platform so
-        // the swing is always usable (never an awkward angle or impossible distance).
-        const dxFromPrevious = Math.abs(gapMidX - this.lastGeneratedX);
-        const maxAnchorDy = Math.sqrt(Math.max(0, proc.MAX_REACH * proc.MAX_REACH - dxFromPrevious * dxFromPrevious));
-        anchorY = Math.max(anchorY, this.lastGeneratedY - maxAnchorDy);
-
-        this.spawnHookAnchor(gapMidX, anchorY);
-
-        // Update the trackers for the next loop
-        this.lastGeneratedX = nextX;
-        this.lastGeneratedY = nextY;
-    }
-
-    // Returns the difficulty parameter block matching the player's current altitude so
-    // the climb progressively tightens: gaps grow, platforms narrow, anchors lift and
-    // shift off-center, and the death-void margin shrinks.
-    private getDifficultyParams() {
-        const difficulty = GAME_CONSTANTS.DIFFICULTY;
-        const altitude = this.currentAltitudeMeters;
-
-        if (altitude >= GAME_CONSTANTS.ALTITUDE.MASTERY_ZONE) {
-            return difficulty.MASTERY;
-        }
-        if (altitude >= GAME_CONSTANTS.ALTITUDE.COMPETITIVE_ZONE) {
-            return difficulty.COMPETITIVE;
-        }
-        return difficulty.WARMUP;
-    }
-
-    private cleanupOldPlatforms() {
-        for (let i = this.platforms.length - 1; i >= 0; i--) {
-            const platform = this.platforms[i];
-
-            if (!platform || !platform.body) {
-                this.platforms.splice(i, 1);
-                continue;
-            }
-
-            const platformY = platform.body.position.y;
-
-            if (platformY > this.player.y + 2000) {
-                platform.destroy();
-                this.platforms.splice(i, 1);
-            }
-        }
-
-        for (let i = this.hookNodes.length - 1; i >= 0; i--) {
-            const node = this.hookNodes[i];
-
-            if (!node || !node.body) {
-                this.hookNodes.splice(i, 1);
-                continue;
-            }
-
-            if (node.body.position.y > this.player.y + 2200) {
-                node.destroy();
-                this.hookNodes.splice(i, 1);
-            }
-        }
+    private generateLevelSeed(): number {
+        // A fresh seed every run keeps runs rerollable; the same seed always
+        // reproduces the exact same level (useful for debugging and balancing).
+        return (Date.now() ^ ((Math.random() * 0x100000000) >>> 0)) >>> 0;
     }
 
     // Saving high scores to the database (called on game over)

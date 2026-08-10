@@ -11,7 +11,9 @@ export class Player extends Phaser.GameObjects.Sprite {
     private coreBodyRadius: number;
 
     constructor(scene: Phaser.Scene, x: number, y: number) {
-        super(scene, x, y, "hero_sheet", 10);
+        // Frame 1 is the base idle pose (matches the 2-frame breathing idle anim), so the
+        // sprite spawns already in a stable idle pose instead of flashing a tumbling frame.
+        super(scene, x, y, "hero_sheet", 1);
 
         this.coreBodyRadius = GAME_CONSTANTS.PLAYER.RADIUS;
 
