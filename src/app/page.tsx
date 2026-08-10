@@ -6,6 +6,11 @@ import { authClient } from "@/src/lib/auth-client";
 
 type AppState = 'intro' | 'menu' | 'playing' | 'leaderboard';
 
+interface GameOverData {
+  altitude: number;
+  best: number;
+}
+
 interface LeaderboardPlayer {
   _id: string;
   name: string;
@@ -140,6 +145,9 @@ export default function Home() {
   const [leaders, setLeaders] = useState<LeaderboardPlayer[]>([]);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
 
+  const [gameOver, setGameOver] = useState<GameOverData | null>(null);
+  const [gameKey, setGameKey] = useState(0); // Bump to remount a fresh Phaser run
+
   const [isMenuMounted, setIsMenuMounted] = useState(currentView === "menu");
 
   useEffect(() => {
@@ -167,6 +175,25 @@ export default function Home() {
   const handleLogout = async () => {
     await authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } });
   };
+
+  const handleRerun = () => {
+    setGameOver(null);
+    setGameKey((k) => k + 1);
+  };
+
+  const handleExitToLauncher = () => {
+    setGameOver(null);
+    setCurrentView('menu');
+  };
+
+  useEffect(() => {
+    const handleGameOver = (e: Event) => {
+      const detail = (e as CustomEvent<GameOverData>).detail;
+      setGameOver(detail);
+    };
+    window.addEventListener('tetherverse:gameover', handleGameOver);
+    return () => window.removeEventListener('tetherverse:gameover', handleGameOver);
+  }, []);
 
   if (isPending) {
     return (
@@ -303,7 +330,76 @@ export default function Home() {
           >
             ← ABORT ASCENT
           </button>
-          <GameCanvas />
+          <GameCanvas key={gameKey} />
+
+          {/* GAME OVER OVERLAY */}
+          {gameOver && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(139,92,246,0.16)_0%,transparent_60%)] pointer-events-none" />
+
+              <div className="relative w-full max-w-md bg-slate-900/50 border border-violet-500/25 rounded-2xl shadow-2xl shadow-violet-950/40 overflow-hidden p-8 text-center">
+                {/* top accent line */}
+                <div className="absolute top-0 inset-x-0 h-px bg-linear-to-r from-transparent via-cyan-400/60 to-transparent" />
+
+                {/* Ω multiverse emblem with rotating dashed ring */}
+                <div className="relative w-20 h-20 mx-auto border border-cyan-500/20 rounded-full bg-slate-900/60 flex items-center justify-center">
+                  <div className="absolute inset-2 border border-dashed border-violet-500/20 rounded-full animate-[spin_40s_linear_infinite]" />
+                  <span className="text-3xl font-black text-slate-300">Ω</span>
+                </div>
+
+                <p className="mt-6 font-mono text-[10px] tracking-[0.4em] text-violet-400 uppercase">
+                  Node Status // Terminated
+                </p>
+                <h1 className="mt-1 font-black text-5xl tracking-tight uppercase">
+                  <span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 via-violet-400 to-fuchsia-500">
+                    Signal Lost
+                  </span>
+                </h1>
+                <p className="mt-1 text-slate-500 font-mono text-xs tracking-widest uppercase">
+                  Ascent terminated // Rift collapsed
+                </p>
+
+                {gameOver.altitude >= gameOver.best && gameOver.altitude > 0 && (
+                  <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-1.5 font-mono text-xs tracking-widest text-cyan-300 uppercase">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                    New Dimensional Record
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4">
+                    <p className="font-mono text-[10px] tracking-[0.3em] text-slate-500 uppercase">Altitude</p>
+                    <p className="mt-1 font-mono font-black text-3xl text-cyan-400">
+                      {gameOver.altitude}m
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-4">
+                    <p className="font-mono text-[10px] tracking-[0.3em] text-slate-500 uppercase">Record</p>
+                    <p className="mt-1 font-mono font-black text-3xl text-violet-400">
+                      {gameOver.best}m
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-8 flex flex-col gap-3">
+                  <button
+                    onClick={handleRerun}
+                    className="bg-linear-to-r from-cyan-500 to-violet-600 text-white px-8 py-4 rounded-xl font-mono font-black text-sm tracking-widest hover:shadow-[0_0_30px_rgba(139,92,246,0.4)] transition-all active:scale-95 border border-cyan-400/20"
+                  >
+                    ▶ RERUN ASCENT
+                  </button>
+                  <button
+                    onClick={handleExitToLauncher}
+                    className="bg-slate-900/80 hover:bg-slate-800 text-slate-300 px-8 py-3.5 rounded-xl font-mono font-bold text-sm tracking-widest transition-all active:scale-95 border border-slate-800 hover:border-slate-700"
+                  >
+                    EXIT TO LAUNCHER
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

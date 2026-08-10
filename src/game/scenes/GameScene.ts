@@ -33,6 +33,9 @@ export class GameScene extends Scene {
     private lastGeneratedY: number = 0;
     private runLowestY: number = 0; // Tracks the highest point reached THIS run to move the death-zone up
 
+    private isGameOver: boolean = false;
+    private campGraceTimer: number = 0; // Accumulated ms spent resting below the death-void
+
     // Last platform the player safely settled on (for the checkpoint respawn mechanic).
     private lastSafeX: number = 0;
     private lastSafeTopY: number = 0;
@@ -280,9 +283,13 @@ export class GameScene extends Scene {
         this.lastGeneratedY = this.groundReferenceY - 650;
         this.runLowestY = this.groundReferenceY;
         this.currentAltitudeMeters = 0;
+        this.isGameOver = false;
+        this.campGraceTimer = 0;
     }
 
     update(time: number, delta: number) {
+        if (this.isGameOver) return;
+
         this.updateBackgroundMotion();
 
         // Update the pivot engine routines
@@ -345,18 +352,34 @@ export class GameScene extends Scene {
                 this.runLowestY = this.player.y;
             }
 
-            // --- ANTI-CAMPING RISING VOID ---
-            // The death-zone climbs with your best altitude: the higher you have climbed,
-            // the higher the floor beneath you, so stalling/hovering in low zones is lethal.
-            // Zone-scaled margins stay swing-safe. The speed gate lets a genuine missed
-            // jump (fast fall) through so the checkpoint recovery rescues it instead.
+            // --- FORGIVING DEATH-VOID ---
+            // You only die when you are unhooked, below EVERY remaining platform, and
+            // resting (slow) long enough to have no recovery path left. Hooking, moving,
+            // or sitting above the lowest platform always resets the countdown, so the
+            // player is never killed mid-swing or with a platform within landing reach.
             const difficultyParams = this.getDifficultyParams();
-            const voidY = this.runLowestY + difficultyParams.voidMargin;
             const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
+            const lowestAlive = this.platforms.find(
+                p => p && p.active && p.body && p.body.position
+            );
 
-            if (this.player.y > voidY && fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) {
-                this.handlePlayerFailure();
-                return;
+            let belowVoidAndIdle = false;
+            if (lowestAlive && lowestAlive.body && lowestAlive.body.position) {
+                const voidY = lowestAlive.y + difficultyParams.voidMargin;
+                belowVoidAndIdle =
+                    !this.pivotEngine?.isCurrentlyHooked() &&
+                    this.player.y > voidY &&
+                    fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD;
+            }
+
+            if (belowVoidAndIdle) {
+                this.campGraceTimer += delta;
+                if (this.campGraceTimer >= GAME_CONSTANTS.CHECKPOINT.CAMP_GRACE_MS) {
+                    this.handlePlayerFailure();
+                    return;
+                }
+            } else {
+                this.campGraceTimer = 0;
             }
 
             // Fallback for the very beginning of the game (before platforms exist).
@@ -587,6 +610,11 @@ export class GameScene extends Scene {
         if (!this.hasSafeSpot) return;
         if (this.pivotEngine?.isCurrentlyHooked()) return;
 
+        // Only rescue a genuine fast fall. A slow rester below the void is handled by
+        // the death-void countdown instead of being warped back (anti-camp safety).
+        const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
+        if (fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) return;
+
         // Only recover when the player has genuinely fallen far below the last safe
         // landing spot (and hasn't already been recovered this far below it).
         if (this.player.y <= this.lastSafeTopY + GAME_CONSTANTS.CHECKPOINT.RESPAWN_FALL_DISTANCE) {
@@ -610,6 +638,13 @@ export class GameScene extends Scene {
     }
 
     private handlePlayerFailure() {
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+
+        // Capture the run peak altitude (highest point reached this run) before pausing.
+        const peakPixels = (this.groundReferenceY - this.runLowestY) - 20;
+        const peakMeters = Math.max(0, Math.floor(peakPixels / 10));
+
         // 1. Capture and save the high score immediately before anything is destroyed
         if (this.maxAltitudeMeters) {
             this.saveHighScore(this.maxAltitudeMeters);
@@ -621,8 +656,19 @@ export class GameScene extends Scene {
             this.pivotEngine.destroy();
         }
 
-        // 3. Trigger a native scene reload framework sequence
-        this.scene.restart();
+        // 3. Freeze the world so the scene renders a still frame behind the React overlay
+        this.matter.world.pause();
+
+        // 4. Hand control to the React layer: it renders the themed GAME OVER overlay and
+        //    decides between rerunning (remount) or exiting back to the launcher.
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("tetherverse:gameover", {
+                detail: {
+                    altitude: peakMeters,
+                    best: this.maxAltitudeMeters
+                }
+            }));
+        }
     }
     private generateNextPlatform() {
         const proc = GAME_CONSTANTS.PROCEDURAL;

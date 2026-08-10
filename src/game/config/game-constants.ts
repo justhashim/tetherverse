@@ -27,6 +27,7 @@ export const GAME_CONSTANTS = {
     },
     CHECKPOINT: {
         RESPAWN_FALL_DISTANCE: 300,      // If unhooked and this far below the last safe spot, respawn there
+        CAMP_GRACE_MS: 1500,             // Sustained slow rest below the death-void before game over
     },
     PROCEDURAL: {
         MIN_GAP_X: 200,                  // Minimum horizontal gap between consecutive platforms (guaranteed forward)
