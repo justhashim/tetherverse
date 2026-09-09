@@ -3,19 +3,36 @@ import { headers } from "next/headers";
 import { connectToDatabase } from "@/src/lib/db";
 import { ObjectId, Filter } from "mongodb";
 
-function buildUserQuery(userId: string): Filter<any> {
+interface UserDocument {
+    _id?: ObjectId | string;
+    id?: string;
+    name?: string;
+    email?: string;
+    image?: string | null;
+    maxAltitude?: number;
+}
+
+interface SessionUserWithStats {
+    id: string;
+    name: string;
+    email: string;
+    image?: string | null;
+    maxAltitude?: number;
+}
+
+function buildUserQuery(userId: string): Filter<UserDocument> {
     if (ObjectId.isValid(userId) && String(new ObjectId(userId)) === userId) {
         return {
             $or: [
                 { _id: new ObjectId(userId) },
-                { _id: userId as any },
+                { _id: userId },
                 { id: userId }
             ]
         };
     }
     return {
         $or: [
-            { _id: userId as any },
+            { _id: userId },
             { id: userId }
         ]
     };
@@ -38,7 +55,7 @@ export async function POST(request: Request) {
         }
 
         const db = await connectToDatabase();
-        const collection = db.collection('user');
+        const collection = db.collection<UserDocument>('user');
         const query = buildUserQuery(session.user.id);
 
         const currentUser = await collection.findOne(query);
@@ -60,7 +77,7 @@ export async function POST(request: Request) {
     }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
     try {
         const session = await auth.api.getSession({
             headers: await headers()
@@ -71,15 +88,15 @@ export async function GET(request: Request) {
         }
 
         // Fast path: Better-Auth already fetches user additionalFields (including maxAltitude)
-        // during session retrieval. Returning it directly avoids an extra 100-300ms database roundtrip!
-        const sessionUser = session.user as any;
+        // during session retrieval. Returning it directly avoids an extra database roundtrip.
+        const sessionUser = session.user as unknown as SessionUserWithStats;
         if (typeof sessionUser.maxAltitude === "number") {
             return Response.json({ success: true, maxAltitude: sessionUser.maxAltitude });
         }
 
         // Fallback: Query the user collection using the shared native pool
         const db = await connectToDatabase();
-        const collection = db.collection('user');
+        const collection = db.collection<UserDocument>('user');
         const query = buildUserQuery(session.user.id);
 
         const currentUser = await collection.findOne(query);

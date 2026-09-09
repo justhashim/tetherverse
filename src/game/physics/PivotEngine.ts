@@ -138,7 +138,7 @@ export class PivotEngine {
                 this.player.x - this.anchorPoint.x,
                 this.player.y - this.anchorPoint.y
             );
-            let tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
+            const tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
 
             const velocity = this.player.body.velocity;
             const currentSpeed = Math.hypot(velocity.x, velocity.y);

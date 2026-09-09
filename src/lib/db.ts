@@ -1,4 +1,4 @@
-import { MongoClient, Db } from 'mongodb';
+import { MongoClient, Db, Collection } from 'mongodb';
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 
@@ -7,7 +7,6 @@ if (!MONGODB_URI) {
 }
 
 declare global {
-    // eslint-disable-next-line no-var
     var _mongoClient: MongoClient | undefined;
 }
 
@@ -29,10 +28,10 @@ export const mongoDb = client.db();
  * Returns the native MongoDB database instance.
  * Also provides `.connection.collection(...)` for backwards compatibility.
  */
-export async function connectToDatabase(): Promise<Db & { connection: { collection: (name: string) => any } }> {
+export async function connectToDatabase(): Promise<Db & { connection: { collection: <T extends Document = Document>(name: string) => Collection<T> } }> {
     return Object.assign(mongoDb, {
         connection: {
-            collection: (name: string) => mongoDb.collection(name),
+            collection: <T extends Document = Document>(name: string) => mongoDb.collection<T>(name),
         },
     });
 }
