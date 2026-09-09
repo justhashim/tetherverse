@@ -328,7 +328,15 @@ export class GameScene extends Scene {
 
         this.settlePlayerIfOnSurface();
 
-        if (this.player) {
+        if (this.player && this.player.body) {
+            const isHooked = this.pivotEngine?.isCurrentlyHooked() ?? false;
+            const routeDir = this.levelGenerator
+                ? this.levelGenerator.getRouteDirectionNear(this.player.x, this.player.y)
+                : 1;
+
+            // Optical flow: continuous 2.5D mirroring turn, squash/stretch, and aerodynamic banking
+            this.player.updateOpticalFlow(delta, routeDir, activeAnchor, isHooked);
+
             // --- FAIL CONDITIONAL CHECK ---
             // If the player falls past the initial base ground zone, execute fail loop
             if (this.player.y > this.groundReferenceY + 400) {
