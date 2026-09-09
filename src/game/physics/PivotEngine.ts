@@ -137,28 +137,33 @@ export class PivotEngine {
                 this.player.x - this.anchorPoint.x,
                 this.player.y - this.anchorPoint.y
             );
-            const tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
+            let tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
 
             const velocity = this.player.body.velocity;
-            const dot = tangent.x * velocity.x + tangent.y * velocity.y;
+            const currentSpeed = Math.hypot(velocity.x, velocity.y);
 
-            // If player is already moving along the arc, drive force reinforces current motion!
-            if (dot < -0.01) {
-                tangent.negate();
-            } else if (Math.abs(dot) <= 0.01) {
-                // If stationary, pump forward (rightward / upward)
-                if (tangent.x < 0) {
+            // Only accelerate if below the max swing speed cap
+            if (currentSpeed < GAME_CONSTANTS.SWING.MAX_SWING_SPEED) {
+                const dot = tangent.x * velocity.x + tangent.y * velocity.y;
+
+                // If player is already moving along the arc, drive force reinforces current motion!
+                if (dot < -0.01) {
                     tangent.negate();
+                } else if (Math.abs(dot) <= 0.01) {
+                    // If stationary, pump forward (rightward / upward)
+                    if (tangent.x < 0) {
+                        tangent.negate();
+                    }
                 }
+
+                const driveForce = GAME_CONSTANTS.SWING.DRIVE_FORCE;
+
+                this.scene.matter.body.applyForce(
+                    this.player.body,
+                    this.player.body.position,
+                    { x: tangent.x * driveForce, y: tangent.y * driveForce }
+                );
             }
-
-            const driveForce = GAME_CONSTANTS.SWING.DRIVE_FORCE;
-
-            this.scene.matter.body.applyForce(
-                this.player.body,
-                this.player.body.position,
-                { x: tangent.x * driveForce, y: tangent.y * driveForce }
-            );
         }
     }
 
@@ -186,15 +191,13 @@ export class PivotEngine {
             this.pivotConstraint = null;
         }
 
-        // Boost the built-up swing velocity so releasing actually flings the player
-        // toward the next platform ("Release to LAUNCH!"), then clamp to a controlled
-        // max so Jack never shoots off the screen.
+        // Apply gentle launch boost preserving natural swing trajectory
         const boostX = swingVelocity.x * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
         let boostY = swingVelocity.y * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
 
-        // If releasing while moving forward, provide a subtle upward boost to clear the target ledge
-        if (swingVelocity.x > 1) {
-            boostY -= 2.0;
+        // Subtle upward assist only if moving forward and slightly falling
+        if (swingVelocity.x > 2 && swingVelocity.y > 0) {
+            boostY -= 1.0;
         }
 
         const boostedSpeed = Math.hypot(boostX, boostY);

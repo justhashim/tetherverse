@@ -18,18 +18,22 @@ export default function Game() {
     let isDestroyed = false;
 
     async function initPhaser() {
-      // 4. Dynamically import Phaser so it ONLY loads on the client browser
-      const Phaser = (await import("phaser")).default;
-      const { gameConfig } = await import("./config/phaser-config");
+      try {
+        // 4. Dynamically import Phaser so it ONLY loads on the client browser
+        const Phaser = (await import("phaser")).default;
+        const { gameConfig } = await import("./config/phaser-config");
 
-      // Check if the component unmounted while downloading the library
-      if (isDestroyed) return;
+        // Check if the component unmounted while downloading the library
+        if (isDestroyed) return;
 
-      if (!gameRef.current) {
-        gameRef.current = new Phaser.Game({
-          ...gameConfig,
-          parent: containerRef.current, // Pass the direct node reference safely
-        });
+        if (!gameRef.current && containerRef.current) {
+          gameRef.current = new Phaser.Game({
+            ...gameConfig,
+            parent: containerRef.current, // Pass the direct node reference safely
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load or initialize Phaser engine:", err);
       }
     }
 

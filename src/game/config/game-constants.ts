@@ -13,14 +13,15 @@ export const GAME_CONSTANTS = {
         MIN_VELOCITY: 2,          // Minimum safe escape velocity threshold
         MAX_VELOCITY: 28,         // Hard physics velocity cap for launch force
         SMOOTHING_FACTOR: 0.15,   // Input interpolation modifier
-        MAX_LAUNCH_SPEED: 30,     // Cap applied to released launch velocity (scaled, dir preserved)
+        MAX_LAUNCH_SPEED: 16,     // Cap applied to released launch velocity (controlled, prevents overshooting)
     },
     SWING: {
         CONSTRAINT_STIFFNESS: 0.08,      // Tether spring stiffness (lower = softer pull)
-        DRIVE_FORCE: 0.07,               // Swing acceleration pump while holding (responsive & punchy)
-        FRICTION_AIR: 0.02,              // Air drag while hooked/swinging (preserves momentum)
-        FALLING_FRICTION_AIR: 0.025,     // Air drag during free-fall/launch (smooth soaring arcs)
-        LAUNCH_BOOST: 1.25,              // Multiplier applied to swing velocity on release
+        DRIVE_FORCE: 0.035,              // Controlled swing acceleration pump (smooth, not overpowered)
+        MAX_SWING_SPEED: 14,             // Speed ceiling while hooked to keep swings manageable
+        FRICTION_AIR: 0.025,             // Air drag while hooked/swinging (balanced momentum)
+        FALLING_FRICTION_AIR: 0.03,      // Air drag during free-fall/launch (predictable arcs)
+        LAUNCH_BOOST: 1.08,              // Gentle velocity multiplier on release
     },
     LANDING: {
         SPEED_THRESHOLD: 18,             // Max total speed allowed for a settle-to-IDLE landing
