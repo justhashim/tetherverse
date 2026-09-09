@@ -1,7 +1,7 @@
 // src/components/leaderboard/LeaderboardPanel.tsx
 'use client';
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LeaderboardPlayer } from "@/src/types/game";
 import LeaderboardEntry from "./LeaderBoardEntry";

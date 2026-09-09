@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Game as PhaserGame } from "phaser";
 
 interface GameProps {
   isActive?: boolean;
 }
 
 export default function Game({ isActive = true }: GameProps) {
-  const gameRef = useRef<any>(null); // Using any temporarily as Phaser is dynamically loaded
+  const gameRef = useRef<PhaserGame | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isReady, setIsReady] = useState(false);
 

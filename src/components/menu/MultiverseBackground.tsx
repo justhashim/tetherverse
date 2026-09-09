@@ -2,17 +2,19 @@
 
 import { motion } from "framer-motion";
 
+// Static deterministic shard parameters to avoid impure function calls during React render
+const SHARDS = Array.from({ length: 12 }).map((_, i) => ({
+    id: i,
+    width: ((i * 37) % 80) + 40,
+    height: ((i * 53) % 150) + 50,
+    top: `${((i * 47) % 90) + 5}%`,
+    left: `${((i * 71) % 90) + 5}%`,
+    rotate: (i * 83) % 360,
+    duration: ((i * 19) % 30) + 30
+}));
+
 export default function MultiverseBackground() {
-    // Generate static structural properties once to optimize CPU lifecycle execution
-    const shards = Array.from({ length: 12 }).map((_, i) => ({
-        id: i,
-        width: Math.random() * 80 + 40,
-        height: Math.random() * 150 + 50,
-        top: `${Math.random() * 100}%`,
-        left: `${Math.random() * 100}%`,
-        rotate: Math.random() * 360,
-        duration: Math.random() * 30 + 30
-    }));
+    const shards = SHARDS;
 
     return (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden bg-slate-950">
