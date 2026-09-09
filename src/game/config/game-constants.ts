@@ -4,7 +4,7 @@ export const GAME_CONSTANTS = {
         DENSITY: 0.004, // Matter.js automatically calculates mass based on area * density
         FRICTION: 0.1,
         FRICTION_STATIC: 0.5,
-        FRICTION_AIR: 0.05,
+        FRICTION_AIR: 0.02,
         BOUNCE: 0,      // Restitution (0 so Jack settles without bouncing off surfaces)
     },
     LAUNCH: {
@@ -17,37 +17,37 @@ export const GAME_CONSTANTS = {
     },
     SWING: {
         CONSTRAINT_STIFFNESS: 0.08,      // Tether spring stiffness (lower = softer pull)
-        DRIVE_FORCE: 0.05,               // Swing acceleration pump while holding
-        FRICTION_AIR: 0.09,              // Air drag while hooked/swinging (punchy but controlled)
-        FALLING_FRICTION_AIR: 0.10,      // Air drag during free-fall/launch (decelerates for landing)
-        LAUNCH_BOOST: 1.2,               // Multiplier applied to swing velocity on release
+        DRIVE_FORCE: 0.07,               // Swing acceleration pump while holding (responsive & punchy)
+        FRICTION_AIR: 0.02,              // Air drag while hooked/swinging (preserves momentum)
+        FALLING_FRICTION_AIR: 0.025,     // Air drag during free-fall/launch (smooth soaring arcs)
+        LAUNCH_BOOST: 1.25,              // Multiplier applied to swing velocity on release
     },
     LANDING: {
-        SPEED_THRESHOLD: 14,             // Max total speed allowed for a settle-to-IDLE landing
+        SPEED_THRESHOLD: 18,             // Max total speed allowed for a settle-to-IDLE landing
     },
     CHECKPOINT: {
         RESPAWN_FALL_DISTANCE: 300,      // If unhooked and this far below the last safe spot, respawn there
         CAMP_GRACE_MS: 1500,             // Sustained slow rest below the death-void before game over
     },
     PROCEDURAL: {
-        ROPE_LENGTH: 340,               // Max tether reach (matches PivotEngine.jackLength)
-        PLATFORM_REACH: 280,            // HARD CEILING: max center-to-center distance (never a target)
-        GENERATION_AHEAD: 1400,         // Distance-based lookahead kept above the player
-        TARGET_SPACING: 180,            // Approx desired spacing -> ceil(1400/180) ~ 8 platforms ahead
-        MIN_FUTURE_PLATFORMS: 5,        // Floor on forward platforms (spacing-derived), not a count rule
-        GENERATION_WIDTH: 2500,         // Dynamic generation corridor width (centered on player)
-        MIN_VERTICAL_GAP: 130,          // Minimum meaningful vertical separation between route platforms
-        MAX_VERTICAL_GAP: 230,          // Maximum vertical separation (leaves ~160px lateral at reach)
-        MIN_HORIZONTAL_GAP: 90,         // Minimum sideways travel so the route never becomes a ladder
-        MAX_HORIZONTAL_GAP: 210,        // Maximum sideways travel per platform
-        CANDIDATE_COUNT: 8,             // Candidates sampled per placement; the best-scoring one wins
-        MAX_CANDIDATE_ATTEMPTS: 3,      // Retry rounds (8 candidates each) before fallback
-        MAX_GENERATED_PER_FRAME: 3,     // Work cap per frame (mobile perf)
+        ROPE_LENGTH: 380,               // Max tether reach (matches PivotEngine.jackLength)
+        PLATFORM_REACH: 360,            // Reachable center-to-center distance band
+        GENERATION_AHEAD: 1800,         // Distance-based lookahead kept above the player
+        TARGET_SPACING: 200,            // Desired spacing between platforms
+        MIN_FUTURE_PLATFORMS: 6,        // Minimum future platforms kept alive ahead
+        GENERATION_WIDTH: 3000,         // Dynamic generation corridor width
+        MIN_VERTICAL_GAP: 120,          // Minimum vertical separation between route platforms
+        MAX_VERTICAL_GAP: 250,          // Maximum vertical separation
+        MIN_HORIZONTAL_GAP: 120,        // Minimum sideways travel per platform
+        MAX_HORIZONTAL_GAP: 300,        // Maximum sideways travel per platform
+        CANDIDATE_COUNT: 10,            // Candidates sampled per placement
+        MAX_CANDIDATE_ATTEMPTS: 4,      // Retry rounds before fallback
+        MAX_GENERATED_PER_FRAME: 4,     // Work cap per frame
         LOCAL_CHECK_RADIUS: 500,        // Nearby-platform scan radius for clearance/density checks
-        CLEARANCE_PAD: 80,              // Extra visual separation beyond physical collision clearance
+        CLEARANCE_PAD: 60,              // Visual separation beyond physical collision clearance
         DENSITY_WINDOW: 500,            // Vertical window for the platform-spam safety cap
-        DENSITY_HBOX: 300,              // Horizontal band for the platform-spam safety cap
-        MAX_PLATFORMS_PER_WINDOW: 3,    // Max platform count inside the density window (special patterns exempt)
+        DENSITY_HBOX: 350,              // Horizontal band for the platform-spam safety cap
+        MAX_PLATFORMS_PER_WINDOW: 4,    // Max platform count inside the density window
         CULL_DISTANCE: 3000,            // Destroy platforms/hooks this far below the player
     },
     ALTITUDE: {

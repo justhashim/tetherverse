@@ -14,8 +14,8 @@ export class PivotEngine {
     private pointerVector: Phaser.Math.Vector2;
 
     private isHooked: boolean = false;
-    private jackLength: number = 340; // Comfortably reaches the first anchor from the start platform
-    private anchorHitRadius: number = 60; // Forgiving tap detection near the hook node
+    private jackLength: number = GAME_CONSTANTS.PROCEDURAL.ROPE_LENGTH; // Matches procedural generation reach
+    private anchorHitRadius: number = 140; // Forgiving tap detection near hook nodes
 
     constructor(scene: Phaser.Scene, player: Player) {
         this.scene = scene;
@@ -40,20 +40,33 @@ export class PivotEngine {
     private attemptAnchor(pointer: Phaser.Input.Pointer): void {
         if (this.isHooked) return;
 
-        this.pointerVector.set(pointer.worldX - this.player.x, pointer.worldY - this.player.y);
-
-        if (this.pointerVector.length() > this.jackLength) {
-            this.pointerVector.setLength(this.jackLength);
-        }
+        const playerX = this.player.body.position.x;
+        const playerY = this.player.body.position.y;
 
         const hookAnchors = this.scene.matter.world.getAllBodies().filter(
             (body: MatterJS.BodyType) => body.label === 'HookAnchor'
         );
 
         let aimedAnchor: MatterJS.BodyType | null = null;
-        let aimedDistance = Number.POSITIVE_INFINITY;
+        let bestScore = Number.POSITIVE_INFINITY;
+
+        const aimDirX = pointer.worldX - playerX;
+        const aimDirY = pointer.worldY - playerY;
+        const aimDist = Math.hypot(aimDirX, aimDirY);
 
         for (const body of hookAnchors) {
+            const distanceToPlayer = Phaser.Math.Distance.Between(
+                playerX,
+                playerY,
+                body.position.x,
+                body.position.y
+            );
+
+            // Anchor must be within rope reach from the player (with a 25px grace threshold)
+            if (distanceToPlayer > this.jackLength + 25) {
+                continue;
+            }
+
             const distanceToPointer = Phaser.Math.Distance.Between(
                 pointer.worldX,
                 pointer.worldY,
@@ -61,20 +74,24 @@ export class PivotEngine {
                 body.position.y
             );
 
-            const distanceToPlayer = Phaser.Math.Distance.Between(
-                this.player.body.position.x,
-                this.player.body.position.y,
-                body.position.x,
-                body.position.y
-            );
+            let score = Number.POSITIVE_INFINITY;
+            if (distanceToPointer <= this.anchorHitRadius) {
+                // Direct tap / click near anchor
+                score = distanceToPointer;
+            } else if (aimDist > 30) {
+                // Directional aim check: dot product between aim direction and anchor direction
+                const toAnchorX = body.position.x - playerX;
+                const toAnchorY = body.position.y - playerY;
+                const dot = (aimDirX * toAnchorX + aimDirY * toAnchorY) / (aimDist * distanceToPlayer);
+                // Within ~50 degree cone of tap direction and within reach
+                if (dot > 0.65) {
+                    score = 200 + (1 - dot) * 300 + distanceToPlayer * 0.2;
+                }
+            }
 
-            if (
-                distanceToPointer <= this.anchorHitRadius &&
-                distanceToPlayer <= this.jackLength &&
-                distanceToPointer < aimedDistance
-            ) {
+            if (score < bestScore) {
                 aimedAnchor = body;
-                aimedDistance = distanceToPointer;
+                bestScore = score;
             }
         }
 
@@ -122,6 +139,19 @@ export class PivotEngine {
             );
             const tangent = new Phaser.Math.Vector2(-swingRadius.y, swingRadius.x).normalize();
 
+            const velocity = this.player.body.velocity;
+            const dot = tangent.x * velocity.x + tangent.y * velocity.y;
+
+            // If player is already moving along the arc, drive force reinforces current motion!
+            if (dot < -0.01) {
+                tangent.negate();
+            } else if (Math.abs(dot) <= 0.01) {
+                // If stationary, pump forward (rightward / upward)
+                if (tangent.x < 0) {
+                    tangent.negate();
+                }
+            }
+
             const driveForce = GAME_CONSTANTS.SWING.DRIVE_FORCE;
 
             this.scene.matter.body.applyForce(
@@ -159,21 +189,27 @@ export class PivotEngine {
         // Boost the built-up swing velocity so releasing actually flings the player
         // toward the next platform ("Release to LAUNCH!"), then clamp to a controlled
         // max so Jack never shoots off the screen.
-        const boostedX = swingVelocity.x * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
-        const boostedY = swingVelocity.y * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
-        const boostedSpeed = Math.hypot(boostedX, boostedY);
+        const boostX = swingVelocity.x * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
+        let boostY = swingVelocity.y * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
+
+        // If releasing while moving forward, provide a subtle upward boost to clear the target ledge
+        if (swingVelocity.x > 1) {
+            boostY -= 2.0;
+        }
+
+        const boostedSpeed = Math.hypot(boostX, boostY);
         const maxSpeed = GAME_CONSTANTS.LAUNCH.MAX_LAUNCH_SPEED;
 
         if (boostedSpeed > maxSpeed && boostedSpeed > 0) {
             const scale = maxSpeed / boostedSpeed;
             this.scene.matter.body.setVelocity(this.player.body, {
-                x: boostedX * scale,
-                y: boostedY * scale
+                x: boostX * scale,
+                y: boostY * scale
             });
         } else {
             this.scene.matter.body.setVelocity(this.player.body, {
-                x: boostedX,
-                y: boostedY
+                x: boostX,
+                y: boostY
             });
         }
 
