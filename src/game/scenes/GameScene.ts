@@ -282,6 +282,10 @@ export class GameScene extends Scene {
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
         this.campGraceTimer = 0;
+
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('tetherverse:game-ready'));
+        }
     }
 
     update(time: number, delta: number) {

@@ -1,14 +1,34 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface GameProps {
-  // Add any component props here if needed
+  isActive?: boolean;
 }
 
-export default function Game() {
+export default function Game({ isActive = true }: GameProps) {
   const gameRef = useRef<any>(null); // Using any temporarily as Phaser is dynamically loaded
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const handleGameReady = () => setIsReady(true);
+    window.addEventListener("tetherverse:game-ready", handleGameReady);
+    return () => window.removeEventListener("tetherverse:game-ready", handleGameReady);
+  }, []);
+
+  // Synchronize scene input activation with the active view state
+  useEffect(() => {
+    if (!gameRef.current) return;
+    try {
+      const scene = gameRef.current.scene?.getScene("GameScene");
+      if (scene) {
+        scene.input.enabled = isActive;
+      }
+    } catch {
+      // Scene may not be mounted yet
+    }
+  }, [isActive, isReady]);
 
   useEffect(() => {
     // 2. Ensure the container div is physically loaded in the DOM tree before running
@@ -49,13 +69,31 @@ export default function Game() {
   }, []);
 
   return (
-    <div
-      ref={containerRef} // This guarantees Phaser can target the canvas without racing the DOM
-      id="game-container"
-      style={{
-        width: "100vw",
-        height: "100vh",
-      }}
-    />
+    <div className="relative w-screen h-screen overflow-hidden">
+      <div
+        ref={containerRef} // This guarantees Phaser can target the canvas without racing the DOM
+        id="game-container"
+        style={{
+          width: "100vw",
+          height: "100vh",
+        }}
+      />
+
+      {/* Cybernetic loading indicator during asset load or initial boot */}
+      {!isReady && isActive && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md transition-opacity duration-300">
+          <div className="relative w-16 h-16 mb-4">
+            <div className="absolute inset-0 rounded-full border-2 border-cyan-500/20 border-t-cyan-400 animate-spin" />
+            <div className="absolute inset-2 rounded-full border-2 border-violet-500/20 border-b-violet-400 animate-[spin_1.2s_linear_infinite_reverse]" />
+          </div>
+          <p className="font-mono text-xs font-bold text-cyan-400 tracking-[0.25em] uppercase animate-pulse">
+            Initializing Ascent Vector...
+          </p>
+          <p className="font-mono text-[10px] text-slate-500 tracking-widest mt-1 uppercase">
+            Calibrating Quantum Tether
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

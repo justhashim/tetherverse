@@ -2,6 +2,10 @@
 
 import Game from "@/src/game/Game";
 
-export default function GameCanvas() {
-    return <Game />;
+interface GameCanvasProps {
+    isActive?: boolean;
+}
+
+export default function GameCanvas({ isActive = true }: GameCanvasProps) {
+    return <Game isActive={isActive} />;
 }

@@ -232,6 +232,48 @@ export default function Home() {
     return () => window.removeEventListener('tetherverse:gameover', handleGameOver);
   }, []);
 
+  // Eagerly pre-warm heavy game engine modules and assets in the background
+  useEffect(() => {
+    const prewarm = async () => {
+      try {
+        await Promise.all([
+          import("phaser"),
+          import("@/src/game/config/phaser-config"),
+        ]);
+        const textures = [
+          '/background/background.png',
+          '/assets/platform.png',
+          '/assets/hook_node.png',
+          '/character/hero.png',
+        ];
+        textures.forEach((src) => {
+          const img = new Image();
+          img.src = src;
+        });
+      } catch {
+        // Silently ignore background prewarm hiccups
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(() => prewarm());
+      } else {
+        setTimeout(prewarm, 200);
+      }
+    }
+  }, []);
+
+  // Pre-mount GameCanvas in the background once session is ready
+  useEffect(() => {
+    if (session) {
+      const timer = setTimeout(() => {
+        setIsMenuMounted(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [session]);
+
   if (isPending) {
     return (
       <main className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center gap-2">
@@ -359,15 +401,23 @@ export default function Home() {
       )}
 
       {/* VIEW D: RUNTIME CORE ENGINE CONTAINER */}
-      {currentView === 'playing' && (
-        <div className="w-full h-full relative z-30">
-          <button
-            onClick={() => setCurrentView('menu')}
-            className="absolute top-6 left-6 z-50 bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-red-400 px-4 py-2 rounded-lg border border-slate-800 hover:border-red-500/30 font-mono text-xs font-bold backdrop-blur-sm transition-all shadow-lg"
-          >
-            ← ABORT ASCENT
-          </button>
-          <GameCanvas key={gameKey} />
+      {(currentView === 'playing' || isMenuMounted) && (
+        <div className={`w-full h-full absolute inset-0 transition-opacity duration-700 ${
+          currentView === 'playing' ? "z-30 opacity-100 pointer-events-auto" : "z-10 opacity-30 pointer-events-none"
+        }`}>
+          {currentView === 'playing' && (
+            <button
+              onClick={() => {
+                setGameOver(null);
+                setGameKey((k) => k + 1);
+                setCurrentView('menu');
+              }}
+              className="absolute top-6 left-6 z-50 bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-red-400 px-4 py-2 rounded-lg border border-slate-800 hover:border-red-500/30 font-mono text-xs font-bold backdrop-blur-sm transition-all shadow-lg"
+            >
+              ← ABORT ASCENT
+            </button>
+          )}
+          <GameCanvas key={gameKey} isActive={currentView === 'playing'} />
 
           {/* GAME OVER OVERLAY */}
           {gameOver && (

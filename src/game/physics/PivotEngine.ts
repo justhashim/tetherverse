@@ -39,6 +39,7 @@ export class PivotEngine {
 
     private attemptAnchor(pointer: Phaser.Input.Pointer): void {
         if (this.isHooked) return;
+        if (!this.scene.input.enabled) return;
 
         const playerX = this.player.body.position.x;
         const playerY = this.player.body.position.y;
