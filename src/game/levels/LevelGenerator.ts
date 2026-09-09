@@ -18,6 +18,7 @@ export type PatternId =
     | "OFFSET_LANDING"
     | "LONG_RELEASE"
     | "HIGH_RISK_SHORTCUT"
+    | "SWITCHBACK"
     | "RECOVERY_ROUTE";
 
 type Beat =
@@ -81,16 +82,6 @@ const BEAT_SEQUENCE: Beat[] = [
     "RELIEF",
 ];
 
-const FALLBACK_SPEC: PatternSpec = {
-    spread: 1.0,
-    stepScale: 1.0,
-    widthScale: 1.0,
-    anchorLiftScale: 1.0,
-    isChain: false,
-    risk: false,
-    recovery: false,
-};
-
 const TUTORIAL_HOOKS: ReadonlyArray<{
     platformX: number;
     yOffset: number;
@@ -119,6 +110,8 @@ export class LevelGenerator {
     private committedCount: number = 0;
     private lastPattern: PatternId | null = null;
     private currentProfile: DifficultyProfile;
+    private currentDirection: number = 1; // 1 = ascending rightward, -1 = ascending leftward
+    private stepsInDirection: number = 0;
 
     constructor(
         scene: Phaser.Scene,
@@ -156,6 +149,43 @@ export class LevelGenerator {
 
     public get voidMargin(): number {
         return this.currentProfile.voidMargin;
+    }
+
+    public get climbDirection(): number {
+        return this.currentDirection;
+    }
+
+    /**
+     * Determines the macro climb direction (-1 for left, 1 for right, 0 for vertical)
+     * of the next reachable platform immediately above the player's current position.
+     * This provides a stable, player-relative lookahead that never flutters with
+     * platforms generated thousands of pixels ahead in the procedural queue.
+     */
+    public getRouteDirectionNear(playerX: number, playerY: number): number {
+        let closestAbove: BasePlatform | null = null;
+        let closestDist = Infinity;
+
+        for (const p of this.platforms) {
+            if (!p || !p.active || !p.body) continue;
+            const dy = playerY - p.y;
+            // Scan for platforms directly above the player within a realistic single-hop range
+            if (dy > 20 && dy < 400) {
+                const dist = Math.hypot(p.x - playerX, dy);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestAbove = p;
+                }
+            }
+        }
+
+        if (closestAbove) {
+            const dx = closestAbove.x - playerX;
+            if (dx > 60) return 1;
+            if (dx < -60) return -1;
+            return 0; // Centered vertical climb or narrow zigzag
+        }
+
+        return 1; // Default to standard forward progression
     }
 
     public get platformCount(): number {
@@ -230,7 +260,7 @@ export class LevelGenerator {
         let best: ScoredCandidate | null = null;
         for (let attempt = 0; attempt < proc.MAX_CANDIDATE_ATTEMPTS && !best; attempt++) {
             for (let i = 0; i < proc.CANDIDATE_COUNT; i++) {
-                const candidate = this.sampleCandidate(profile, spec, prevX, prevY);
+                const candidate = this.sampleCandidate(profile, spec, pattern, prevX, prevY);
                 if (!candidate) continue;
 
                 if (!this.validateCandidate(candidate, prevX, prevY)) {
@@ -282,13 +312,13 @@ export class LevelGenerator {
     private getBeatPool(beat: Beat): PatternId[] {
         switch (beat) {
             case "SAFE":
-                return ["STRAIGHT_ASCENT", "RIGHT_SWING"];
+                return ["STRAIGHT_ASCENT", "RIGHT_SWING", "LEFT_SWING", "SWITCHBACK"];
             case "CHALLENGE":
-                return ["OFFSET_LANDING", "WIDE_SWING", "HOOK_CHAIN"];
+                return ["OFFSET_LANDING", "WIDE_SWING", "HOOK_CHAIN", "SWITCHBACK", "ZIGZAG"];
             case "RISK":
-                return ["WIDE_SWING", "LONG_RELEASE", "HOOK_CHAIN", "TIGHT_PRECISION"];
+                return ["WIDE_SWING", "LONG_RELEASE", "HOOK_CHAIN", "TIGHT_PRECISION", "SWITCHBACK"];
             case "RELIEF":
-                return ["STRAIGHT_ASCENT", "WIDE_SWING"];
+                return ["STRAIGHT_ASCENT", "WIDE_SWING", "RECOVERY_ROUTE"];
             case "HIGH_RISK":
                 return ["HIGH_RISK_SHORTCUT", "LONG_RELEASE", "TIGHT_PRECISION"];
             case "MAJOR_CLIMB":
@@ -297,12 +327,13 @@ export class LevelGenerator {
     }
 
     // =====================================================================
-    //  Spatial sampling - forward-ascending climbing rhythm
+    //  Spatial sampling - multi-directional ascending climbing rhythm
     // =====================================================================
 
     private sampleCandidate(
         profile: DifficultyProfile,
         spec: PatternSpec,
+        pattern: PatternId,
         prevX: number,
         prevY: number
     ): Candidate | null {
@@ -313,25 +344,55 @@ export class LevelGenerator {
         const minGap = Math.max(proc.MIN_VERTICAL_GAP, profile.stepMin * spec.stepScale);
         const stepUp = this.between(minGap, maxGap);
 
-        // 2. Forward horizontal travel derived from reach
+        // 2. Determine climbing direction
+        let dir = this.currentDirection;
+        if (prevX > proc.CORRIDOR_MAX_X - 350) {
+            // Approaching mountain right boundary: force switchback left
+            dir = -1;
+        } else if (prevX < proc.CORRIDOR_MIN_X + 350) {
+            // Approaching mountain left boundary: force switchback right
+            dir = 1;
+        } else if (pattern === "SWITCHBACK") {
+            dir = -this.currentDirection;
+        } else if (pattern === "ZIGZAG") {
+            dir = -this.currentDirection;
+        } else if (pattern === "LEFT_SWING") {
+            dir = -1;
+        } else if (pattern === "RIGHT_SWING") {
+            dir = 1;
+        }
+
+        // 3. Horizontal travel derived from reach
         const maxHorizontalReach = Math.floor(Math.sqrt(Math.max(
             0,
             this.maxReach * this.maxReach - stepUp * stepUp
         )));
 
-        const usableMaxH = Math.min(proc.MAX_HORIZONTAL_GAP, Math.max(proc.MIN_HORIZONTAL_GAP, maxHorizontalReach));
-        const minH = Math.min(proc.MIN_HORIZONTAL_GAP, usableMaxH);
+        let minH = proc.MIN_HORIZONTAL_GAP;
+        let usableMaxH = Math.min(proc.MAX_HORIZONTAL_GAP, Math.max(minH, maxHorizontalReach));
+
+        // Chimney climbing for VERTICAL_SHAFT
+        if (pattern === "VERTICAL_SHAFT") {
+            minH = 40;
+            usableMaxH = Math.min(usableMaxH, 95);
+        }
+
         if (usableMaxH < minH) return null;
 
         const targetSpread = this.between(minH, usableMaxH) * spec.spread;
-        const forwardGap = Math.max(minH, Math.min(usableMaxH, targetSpread));
+        const hGap = Math.max(minH, Math.min(usableMaxH, targetSpread));
 
-        const width = Math.max(60, Math.round(this.between(profile.widthMin, profile.widthMax) * spec.widthScale));
+        const targetX = prevX + hGap * dir;
+        const width = Math.max(profile.widthMin, Math.round(this.between(profile.widthMin, profile.widthMax) * spec.widthScale));
         const height = Math.round(this.between(profile.heightMin, profile.heightMax));
 
-        // Always climb forward (+x) matching the camera lookahead and player momentum
+        // Must stay inside mountain corridor bounds
+        if (targetX - width < proc.CORRIDOR_MIN_X || targetX + width > proc.CORRIDOR_MAX_X) {
+            return null;
+        }
+
         return {
-            x: prevX + forwardGap,
+            x: targetX,
             y: prevY - stepUp,
             width,
             height
@@ -345,15 +406,15 @@ export class LevelGenerator {
         profile: DifficultyProfile
     ): number {
         const deltaY = prevY - candidate.y;
-        const deltaX = candidate.x - prevX;
+        const deltaX = Math.abs(candidate.x - prevX);
 
         // Spacing score: prefer platforms near the tier's ideal vertical gap
         const spacingScore = Math.max(0, 100 - Math.abs(deltaY - profile.idealGap));
 
-        // Horizontal flow: rewards steady forward travel (180-240px)
+        // Horizontal flow: rewards steady horizontal rhythm in either direction
         const horizontalScore = Math.max(0, 80 - Math.abs(deltaX - profile.idealHorizontal));
 
-        // Landing width score: generous width is rewarded
+        // Landing width score: generous width is rewarded slightly, but tight platforms remain valid
         const widthScore = Math.min(30, candidate.width * 0.25);
 
         return spacingScore + horizontalScore + widthScore;
@@ -368,23 +429,30 @@ export class LevelGenerator {
         prevX: number,
         prevY: number
     ): boolean {
+        const proc = GAME_CONSTANTS.PROCEDURAL;
+
         // 1. Reachable check
         const dist = Math.hypot(candidate.x - prevX, candidate.y - prevY);
         if (dist > this.maxReach + 15) {
             return false;
         }
 
-        // 2. Minimum progression check (must climb forward and upward)
-        if (candidate.x <= prevX + 80 || candidate.y >= prevY - 80) {
+        // 2. Minimum progression check (must climb upward min 60px, and have at least 30px horizontal offset)
+        if (candidate.y >= prevY - 60 || Math.abs(candidate.x - prevX) < 30) {
             return false;
         }
 
-        // 3. No physical overlap with existing platforms
+        // 3. Corridor bounds check
+        if (candidate.x - candidate.width < proc.CORRIDOR_MIN_X || candidate.x + candidate.width > proc.CORRIDOR_MAX_X) {
+            return false;
+        }
+
+        // 4. No physical overlap with existing platforms
         if (this.overlapsExisting(candidate.x, candidate.y, candidate.width, candidate.height)) {
             return false;
         }
 
-        // 4. Headroom clearance: no platform directly overhead blocking launch trajectory
+        // 5. Headroom clearance: no platform directly overhead blocking launch trajectory
         if (!this.hasHeadroomClearance(candidate)) {
             return false;
         }
@@ -501,7 +569,7 @@ export class LevelGenerator {
 
         const deltaX = candidate.x - prevX;
 
-        if (spec.isChain || deltaX > 280) {
+        if (spec.isChain || Math.abs(deltaX) > 280) {
             // Aerial Hook Chain: Spawns 2 mid-air hook nodes for an exhilarating aerial double-grapple
             const standY = prevY - this.prevHeight - GAME_CONSTANTS.PLAYER.RADIUS;
             const targetY = candidate.y - candidate.height - GAME_CONSTANTS.PLAYER.RADIUS;
@@ -527,6 +595,15 @@ export class LevelGenerator {
             this.spawnHookAnchor(anchor.x, anchor.y);
         }
 
+        // Track climbing direction for dynamic lookahead camera and boundary switchbacks
+        const actualDir = candidate.x >= prevX ? 1 : -1;
+        if (actualDir === this.currentDirection) {
+            this.stepsInDirection += 1;
+        } else {
+            this.currentDirection = actualDir;
+            this.stepsInDirection = 1;
+        }
+
         this.headX = candidate.x;
         this.headY = candidate.y;
         this.prevHeight = candidate.height;
@@ -543,7 +620,7 @@ export class LevelGenerator {
         if (spec.risk) return;
         if (!(this.rng() < profile.recoveryChance)) return;
 
-        const rx = x - 60;
+        const rx = x - 60 * this.currentDirection;
         const ry = y + this.between(220, 300);
 
         if (this.overlapsExisting(rx, ry, 90, 30)) return;
@@ -568,9 +645,18 @@ export class LevelGenerator {
         profile: DifficultyProfile,
         spec: PatternSpec
     ): void {
-        const x = prevX + 210;
-        const y = prevY - 160;
-        const width = Math.max(profile.widthMin, 110);
+        const proc = GAME_CONSTANTS.PROCEDURAL;
+        let dir = this.currentDirection;
+        if (prevX > proc.CORRIDOR_MAX_X - 350) {
+            dir = -1;
+        } else if (prevX < proc.CORRIDOR_MIN_X + 350) {
+            dir = 1;
+        }
+
+        let x = prevX + 160 * dir;
+        x = Math.max(proc.CORRIDOR_MIN_X + 100, Math.min(proc.CORRIDOR_MAX_X - 100, x));
+        const y = prevY - 150;
+        const width = Math.max(profile.widthMin, 80);
         const height = 35;
 
         this.commitPlatform(
@@ -658,6 +744,8 @@ export class LevelGenerator {
                 return { spread: 1.3, stepScale: 1.0, widthScale: 0.95, anchorLiftScale: 1.25, isChain: false, risk: false, recovery: false };
             case "HIGH_RISK_SHORTCUT":
                 return { spread: 1.2, stepScale: 1.25, widthScale: 0.8, anchorLiftScale: 1.15, isChain: false, risk: true, recovery: false };
+            case "SWITCHBACK":
+                return { spread: 1.1, stepScale: 1.1, widthScale: 1.1, anchorLiftScale: 1.25, isChain: false, risk: false, recovery: true };
             case "RECOVERY_ROUTE":
                 return { spread: 0.95, stepScale: 0.9, widthScale: 1.1, anchorLiftScale: 0.95, isChain: false, risk: false, recovery: true };
         }

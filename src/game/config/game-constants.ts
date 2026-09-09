@@ -38,11 +38,13 @@ export const GAME_CONSTANTS = {
         MIN_FUTURE_PLATFORMS: 6,        // Minimum future platforms kept alive ahead
         GENERATION_WIDTH: 3000,         // Dynamic generation corridor width
         MIN_VERTICAL_GAP: 120,          // Minimum vertical separation between route platforms
-        MAX_VERTICAL_GAP: 250,          // Maximum vertical separation
-        MIN_HORIZONTAL_GAP: 120,        // Minimum sideways travel per platform
-        MAX_HORIZONTAL_GAP: 300,        // Maximum sideways travel per platform
-        CANDIDATE_COUNT: 10,            // Candidates sampled per placement
-        MAX_CANDIDATE_ATTEMPTS: 4,      // Retry rounds before fallback
+        MAX_VERTICAL_GAP: 270,          // Maximum vertical separation
+        MIN_HORIZONTAL_GAP: 80,         // Minimum sideways travel per platform (allows tighter vertical ascents)
+        MAX_HORIZONTAL_GAP: 320,        // Maximum sideways travel per platform
+        CORRIDOR_MIN_X: 450,            // Mountain left boundary for switchbacks
+        CORRIDOR_MAX_X: 2750,           // Mountain right boundary for switchbacks
+        CANDIDATE_COUNT: 12,            // Candidates sampled per placement
+        MAX_CANDIDATE_ATTEMPTS: 5,      // Retry rounds before fallback
         MAX_GENERATED_PER_FRAME: 4,     // Work cap per frame
         LOCAL_CHECK_RADIUS: 500,        // Nearby-platform scan radius for clearance/density checks
         CLEARANCE_PAD: 60,              // Visual separation beyond physical collision clearance
@@ -52,48 +54,49 @@ export const GAME_CONSTANTS = {
         CULL_DISTANCE: 3000,            // Destroy platforms/hooks this far below the player
     },
     ALTITUDE: {
-        INTERMEDIATE_ZONE: 500,         // Altitude (m) where the Intermediate tier begins
-        HARD_ZONE: 1500,                // Altitude (m) where the Hard tier begins
-        EXPERT_ZONE: 3000,              // Altitude (m) where the Expert tier begins
-        ENDLESS_ZONE: 10000,            // Altitude (m) where the Endless Mastery tier begins
+        INTERMEDIATE_ZONE: 120,         // Altitude (m) where the Intermediate tier begins (early variety)
+        HARD_ZONE: 350,                 // Altitude (m) where the Hard tier begins
+        EXPERT_ZONE: 700,               // Altitude (m) where the Expert tier begins
+        ENDLESS_ZONE: 1500,             // Altitude (m) where the Endless Mastery tier begins
     },
     DIFFICULTY: {
         // Width ranges are the BasePlatform width parameter (~visual width / 2).
         // Every band is hard-capped by PROCEDURAL.PLATFORM_REACH so a tier can never
         // generate a physically impossible platform.
         TUTORIAL: {
-            widthMin: 100, widthMax: 130,           // generous platforms (visual ~200-260)
-            heightMin: 30, heightMax: 50,           // tall, forgiving landings
-            stepMin: 140, stepMax: 180,             // meaningful rhythm climb (floor 130 via constants)
-            idealGap: 150,                          // spacing score target (Lerp toward 220 with difficulty)
-            horizontalRatio: 0.45,                  // fraction of reach usable sideways
-            idealHorizontal: 110,                   // horizontal score target
+            widthMin: 75, widthMax: 95,             // visual ~150-190 (tightened from 260)
+            heightMin: 30, heightMax: 48,           // tall, forgiving landings
+            stepMin: 140, stepMax: 185,             // meaningful rhythm climb
+            idealGap: 155,                          // spacing score target
+            horizontalRatio: 0.50,                  // fraction of reach usable sideways
+            idealHorizontal: 120,                   // horizontal score target
             anchorLiftMin: 140, anchorLiftMax: 200,
             anchorOffsetMax: 40,
-            recoveryChance: 0.35,                   // authored recovery riders (skill saves)
+            recoveryChance: 0.30,                   // authored recovery riders
             riskChance: 0,                          // no high-risk shortcuts yet
             chainLength: 4,                         // platforms per adrenaline beat
-            voidMargin: 320,                        // forgiving death-void
+            voidMargin: 300,                        // forgiving death-void
             patterns: [
                 'STRAIGHT_ASCENT',
                 'LEFT_SWING',
                 'RIGHT_SWING',
                 'ZIGZAG',
+                'SWITCHBACK',
             ] as const,
         },
         INTERMEDIATE: {
-            widthMin: 70, widthMax: 100,             // (visual ~140-200)
-            heightMin: 28, heightMax: 46,
-            stepMin: 160, stepMax: 200,
-            idealGap: 170,
-            horizontalRatio: 0.65,
-            idealHorizontal: 130,
+            widthMin: 50, widthMax: 75,             // visual ~100-150
+            heightMin: 28, heightMax: 44,
+            stepMin: 155, stepMax: 205,
+            idealGap: 175,
+            horizontalRatio: 0.70,
+            idealHorizontal: 140,
             anchorLiftMin: 170, anchorLiftMax: 250,
             anchorOffsetMax: 80,
-            recoveryChance: 0.25,
-            riskChance: 0.08,
+            recoveryChance: 0.20,
+            riskChance: 0.10,
             chainLength: 5,
-            voidMargin: 260,
+            voidMargin: 240,
             patterns: [
                 'STRAIGHT_ASCENT',
                 'LEFT_SWING',
@@ -102,21 +105,23 @@ export const GAME_CONSTANTS = {
                 'WIDE_SWING',
                 'HOOK_CHAIN',
                 'OFFSET_LANDING',
+                'SWITCHBACK',
+                'VERTICAL_SHAFT',
             ] as const,
         },
         HARD: {
-            widthMin: 55, widthMax: 80,               // (visual ~110-160)
-            heightMin: 26, heightMax: 44,
-            stepMin: 170, stepMax: 215,
-            idealGap: 185,
-            horizontalRatio: 0.80,
-            idealHorizontal: 145,
+            widthMin: 40, widthMax: 60,             // visual ~80-120
+            heightMin: 26, heightMax: 42,
+            stepMin: 170, stepMax: 225,
+            idealGap: 190,
+            horizontalRatio: 0.82,
+            idealHorizontal: 155,
             anchorLiftMin: 200, anchorLiftMax: 300,
             anchorOffsetMax: 120,
-            recoveryChance: 0.18,
-            riskChance: 0.16,
+            recoveryChance: 0.14,
+            riskChance: 0.18,
             chainLength: 5,
-            voidMargin: 220,
+            voidMargin: 200,
             patterns: [
                 'STRAIGHT_ASCENT',
                 'ZIGZAG',
@@ -126,21 +131,22 @@ export const GAME_CONSTANTS = {
                 'OFFSET_LANDING',
                 'LONG_RELEASE',
                 'VERTICAL_SHAFT',
+                'SWITCHBACK',
             ] as const,
         },
         EXPERT: {
-            widthMin: 40, widthMax: 60,               // tight (visual ~80-120)
-            heightMin: 24, heightMax: 42,
-            stepMin: 180, stepMax: 225,
-            idealGap: 195,
+            widthMin: 32, widthMax: 50,             // visual ~64-100 (precision landing)
+            heightMin: 24, heightMax: 40,
+            stepMin: 180, stepMax: 240,
+            idealGap: 205,
             horizontalRatio: 0.90,
-            idealHorizontal: 160,
+            idealHorizontal: 165,
             anchorLiftMin: 230, anchorLiftMax: 330,
             anchorOffsetMax: 150,
-            recoveryChance: 0.12,
+            recoveryChance: 0.10,
             riskChance: 0.25,
             chainLength: 6,
-            voidMargin: 180,
+            voidMargin: 170,
             patterns: [
                 'ZIGZAG',
                 'WIDE_SWING',
@@ -150,19 +156,20 @@ export const GAME_CONSTANTS = {
                 'LONG_RELEASE',
                 'VERTICAL_SHAFT',
                 'HIGH_RISK_SHORTCUT',
+                'SWITCHBACK',
                 'RECOVERY_ROUTE',
             ] as const,
         },
         ENDLESS: {
-            widthMin: 40, widthMax: 60,               // same hard ceiling, more combinations
-            heightMin: 20, heightMax: 40,
-            stepMin: 190, stepMax: 230,
-            idealGap: 205,
+            widthMin: 30, widthMax: 45,             // visual ~60-90
+            heightMin: 20, heightMax: 38,
+            stepMin: 190, stepMax: 250,
+            idealGap: 215,
             horizontalRatio: 0.95,
-            idealHorizontal: 170,
+            idealHorizontal: 175,
             anchorLiftMin: 240, anchorLiftMax: 340,
             anchorOffsetMax: 170,
-            recoveryChance: 0.10,
+            recoveryChance: 0.08,
             riskChance: 0.30,
             chainLength: 7,
             voidMargin: 150,
@@ -175,6 +182,7 @@ export const GAME_CONSTANTS = {
                 'LONG_RELEASE',
                 'VERTICAL_SHAFT',
                 'HIGH_RISK_SHORTCUT',
+                'SWITCHBACK',
                 'RECOVERY_ROUTE',
             ] as const,
         },

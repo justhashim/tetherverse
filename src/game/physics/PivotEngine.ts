@@ -196,8 +196,8 @@ export class PivotEngine {
         const boostX = swingVelocity.x * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
         let boostY = swingVelocity.y * GAME_CONSTANTS.SWING.LAUNCH_BOOST;
 
-        // Subtle upward assist only if moving forward and slightly falling
-        if (swingVelocity.x > 2 && swingVelocity.y > 0) {
+        // Subtle upward assist only if moving horizontally and slightly falling
+        if (Math.abs(swingVelocity.x) > 2 && swingVelocity.y > 0) {
             boostY -= 1.0;
         }
 

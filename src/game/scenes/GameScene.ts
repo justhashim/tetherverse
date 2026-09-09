@@ -34,6 +34,7 @@ export class GameScene extends Scene {
 
     private isGameOver: boolean = false;
     private campGraceTimer: number = 0; // Accumulated ms spent resting below the death-void
+    private cameraFollowOffsetX: number = 0;
 
     constructor() {
         super("GameScene");
@@ -261,8 +262,10 @@ export class GameScene extends Scene {
         this.levelGenerator.seedTutorialHooks();
 
         // --- CAMERA SETUP ---
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-        this.cameras.main.setFollowOffset(-this.scale.width * 0.26, 170);
+        // Subtle forward bias for initial tutorial climb (-45px), subpixel camera follow
+        this.cameraFollowOffsetX = -45;
+        this.cameras.main.startFollow(this.player, false, 0.08, 0.08);
+        this.cameras.main.setFollowOffset(this.cameraFollowOffsetX, 150);
 
         // Static UI Height Tracker
         this.heightText = this.add.text(20, 20, "Altitude: 0m", {
@@ -292,6 +295,19 @@ export class GameScene extends Scene {
         if (this.isGameOver) return;
 
         this.updateBackgroundMotion();
+
+        // Smooth dynamic camera lookahead based on immediate route direction ahead of player
+        if (this.levelGenerator && this.player && this.player.body) {
+            const routeDir = this.levelGenerator.getRouteDirectionNear(this.player.x, this.player.y);
+            // routeDir is 1 (climbing right), -1 (climbing left), or 0 (vertical / centered)
+            const targetOffsetX = -routeDir * 45;
+
+            // Delta-time based exponential smoothing for a completely continuous, butter-smooth transition
+            const smoothRate = 1.8;
+            const alpha = 1 - Math.exp(-smoothRate * (delta / 1000));
+            this.cameraFollowOffsetX = Phaser.Math.Linear(this.cameraFollowOffsetX, targetOffsetX, alpha);
+            this.cameras.main.setFollowOffset(this.cameraFollowOffsetX, 150);
+        }
 
         // Update the pivot engine routines
         if (this.pivotEngine) {
