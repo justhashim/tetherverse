@@ -1,13 +1,9 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
-import { MongoClient } from "mongodb";
-
-// We use the raw MongoClient for Better-Auth's internal tables
-const client = new MongoClient(process.env.MONGODB_URI as string);
-const db = client.db(); // Uses the database specified in your URI
+import { mongoDb } from "@/src/lib/db";
 
 export const auth = betterAuth({
-    database: mongodbAdapter(db),
+    database: mongodbAdapter(mongoDb),
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID as string,

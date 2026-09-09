@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
     try {
         const db = await connectToDatabase();
-        const collection = db.connection.collection('user');
+        const collection = db.collection('user');
 
         // Fetch the top 10 users who actually have a score above 0
         const topPlayers = await collection
