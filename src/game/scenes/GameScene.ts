@@ -33,7 +33,6 @@ export class GameScene extends Scene {
     private runLowestY: number = 0; // Tracks the highest point reached THIS run to move the death-zone up
 
     private isGameOver: boolean = false;
-    private campGraceTimer: number = 0; // Accumulated ms spent resting below the death-void
     private cameraFollowOffsetX: number = 0;
 
     constructor() {
@@ -120,6 +119,8 @@ export class GameScene extends Scene {
         this.seedBackgroundObjects();
 
         this.matter.world.setGravity(0, 1.4);
+        // Expand world bounds and disable the bottom physics wall so falling into the void is unrestricted
+        this.matter.world.setBounds(0, -50000, 5000, 100000, 64, true, true, false, false);
 
         this.tetherGraphics = this.add.graphics();
         this.tetherGraphics.setDepth(90);
@@ -284,7 +285,6 @@ export class GameScene extends Scene {
         this.runLowestY = this.groundReferenceY;
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
-        this.campGraceTimer = 0;
 
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('tetherverse:game-ready'));
@@ -337,13 +337,6 @@ export class GameScene extends Scene {
             // Optical flow: continuous 2.5D mirroring turn, squash/stretch, and aerodynamic banking
             this.player.updateOpticalFlow(delta, routeDir, activeAnchor, isHooked);
 
-            // --- FAIL CONDITIONAL CHECK ---
-            // If the player falls past the initial base ground zone, execute fail loop
-            if (this.player.y > this.groundReferenceY + 400) {
-                this.handlePlayerFailure();
-                return;
-            }
-
             // Altimeter calculation routines
             if (this.heightText) {
                 const pixelHeight = (this.groundReferenceY - this.player.y) - 20;
@@ -363,37 +356,50 @@ export class GameScene extends Scene {
                 }
             }
 
-            // --- DYNAMIC FAIL CHECK ---
-            // Track the highest point reached this specific run (Y decreases as you go up)
+            // Track the highest point reached this specific run (Y decreases as you climb)
             if (this.player.y < this.runLowestY) {
                 this.runLowestY = this.player.y;
             }
 
-            // --- FORGIVING DEATH-VOID ---
-            // You only die when you are unhooked, below EVERY remaining platform, and
-            // resting (slow) long enough to have no recovery path left. Hooking, moving,
-            // or sitting above the lowest platform always resets the countdown, so the
-            // player is never killed mid-swing or with a platform within landing reach.
-            const fallSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.y);
-            const lowestAlive = this.levelGenerator.getLowestPlatformBelow(this.player.y);
+            // =====================================================================
+            //  COMPREHENSIVE GAME OVER CHECKS
+            // =====================================================================
 
-            let belowVoidAndIdle = false;
-            if (lowestAlive) {
-                const voidY = lowestAlive.y + this.levelGenerator.voidMargin;
-                belowVoidAndIdle =
-                    !this.pivotEngine?.isCurrentlyHooked() &&
-                    this.player.y > voidY &&
-                    fallSpeed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD;
+            // 1. Fallen below the starting ground / base boundary:
+            // Starting platform surface is at groundReferenceY (1200), bottom at 1240.
+            // Falling past 1260 means the player has plunged into the bottom abyss.
+            if (this.player.y > this.groundReferenceY + 60) {
+                this.handlePlayerFailure();
+                return;
             }
 
-            if (belowVoidAndIdle) {
-                this.campGraceTimer += delta;
-                if (this.campGraceTimer >= GAME_CONSTANTS.CHECKPOINT.CAMP_GRACE_MS) {
+            // 2. Off-screen camera drop:
+            // If the player is unhooked and has plummeted off the visible screen bottom
+            const cameraBottom = this.cameras.main.worldView.bottom;
+            if (!isHooked && this.player.y > cameraBottom + 20 && this.player.body.velocity.y > 0) {
+                this.handlePlayerFailure();
+                return;
+            }
+
+            // 3. Fallen below the lowest active platform in the level (the void):
+            // When falling below all platforms with downward momentum and no tether
+            const lowestActive = this.levelGenerator.getLowestActivePlatform();
+            if (lowestActive && !isHooked) {
+                const voidLimitY = lowestActive.y + Math.min(150, this.levelGenerator.voidMargin);
+                if (this.player.y > voidLimitY && this.player.body.velocity.y > 0) {
                     this.handlePlayerFailure();
                     return;
                 }
-            } else {
-                this.campGraceTimer = 0;
+            }
+
+            // 4. Catastrophic drop to ground after climbing:
+            // If the player reached significant altitude (>= 20m) and fell all the way back
+            // to the mountain base without recovering, the ascent is failed.
+            const peakPixels = (this.groundReferenceY - this.runLowestY) - 20;
+            const peakMeters = Math.max(0, Math.floor(peakPixels / 10));
+            if (peakMeters >= 20 && this.player.y >= this.groundReferenceY - 10 && !isHooked) {
+                this.handlePlayerFailure();
+                return;
             }
 
             // --- ENDLESS GENERATION & CULLING ---

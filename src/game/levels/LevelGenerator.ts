@@ -225,6 +225,18 @@ export class LevelGenerator {
         return lowest;
     }
 
+    // --- Returns the lowest active platform in the world (maximum Y) ---
+    public getLowestActivePlatform(): BasePlatform | null {
+        let lowest: BasePlatform | null = null;
+        for (const p of this.platforms) {
+            if (!p || !p.active || !p.body) continue;
+            if (!lowest || p.y > lowest.y) {
+                lowest = p;
+            }
+        }
+        return lowest;
+    }
+
     // --- Tutorial hook layout (preserved from the original game). ---
     public seedTutorialHooks(): void {
         for (const node of this.hookNodes) {
