@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, memo, useCallback } from "react";
 import GameCanvas from "@/src/components/GameCanvas";
 import { authClient } from "@/src/lib/auth-client";
 
@@ -50,24 +50,45 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false); // Controls the exit animation opacity
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startPlayback = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      video.muted = false;
+      await video.play();
+    } catch (err: unknown) {
+      // AbortError indicates playback was interrupted by a call to pause() or media removal.
+      // This is expected when the user skips, pauses, or unmounts, and should be safely ignored.
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
+      // If unmuted playback is blocked by browser autoplay policy, fallback to muted
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        try {
+          video.muted = true;
+          await video.play();
+        } catch (fallbackErr: unknown) {
+          if (fallbackErr instanceof DOMException && fallbackErr.name === "AbortError") {
+            return;
+          }
+          console.warn("Muted video playback fallback failed:", fallbackErr);
+        }
+        return;
+      }
+      console.warn("Video playback encountered an error:", err);
+    }
+  };
 
   const handleStartIntro = () => {
     setHasInteracted(true);
-    setTimeout(() => {
-      const video = videoRef.current;
-      if (video) {
-        video.muted = false;
-        video.play().catch((err) => {
-          console.error("Audio block bypass failed:", err);
-          video.muted = true;
-          video.play();
-        });
-      }
-    }, 50);
+    startPlayback();
   };
 
   // Triggers the smooth fade out sequence before unmounting the component entirely
-  const triggerFadeOut = () => {
+  const triggerFadeOut = useCallback(() => {
     if (isFadingOut) return; // Prevent double trigger executions
     setIsFadingOut(true);
 
@@ -77,10 +98,18 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
     }
 
     // Match this timeout exactly to the CSS transition timing duration (1000ms = 1s)
-    setTimeout(() => {
+    fadeTimeoutRef.current = setTimeout(() => {
       onComplete();
     }, 1000);
-  };
+  }, [isFadingOut, onComplete]);
+
+  useEffect(() => {
+    return () => {
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasInteracted) return;
@@ -94,25 +123,10 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
 
     window.addEventListener("keydown", handleSkip);
     return () => window.removeEventListener("keydown", handleSkip);
-  }, [hasInteracted, isFadingOut]);
-
-  if (!hasInteracted) {
-    return (
-      <div
-        onClick={handleStartIntro}
-        className="fixed inset-0 w-screen h-screen bg-slate-950 flex flex-col items-center justify-center z-55 cursor-pointer select-none overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(6,182,212,0.05)_0%,transparent_60%)] animate-pulse" />
-        <div className="relative font-mono text-sm tracking-[0.4em] text-cyan-400 uppercase animate-[pulse_2s_infinite] text-center px-4">
-          —CLICK ANYWHERE TO INITIALIZE—
-        </div>
-      </div>
-    );
-  }
+  }, [hasInteracted, triggerFadeOut]);
 
   return (
     <div
-      onClick={triggerFadeOut}
       className={`fixed inset-0 w-screen h-screen bg-black z-50 overflow-hidden transition-opacity duration-1000 ease-out select-none ${isFadingOut ? "opacity-0 pointer-events-none" : "opacity-100"
         }`}
     >
@@ -125,14 +139,37 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
         onEnded={triggerFadeOut}
       />
 
-      {/* Hide the skip button smoothly during the fadeout */}
-      <button
-        onClick={(e) => { e.stopPropagation(); triggerFadeOut(); }}
-        className={`absolute bottom-8 right-8 bg-black/50 hover:bg-violet-600/40 text-slate-300 hover:text-cyan-400 font-mono text-xs tracking-widest uppercase px-5 py-3 rounded-md border border-slate-800 transition-all backdrop-blur-md ${isFadingOut ? "opacity-0 scale-95 pointer-events-none" : "opacity-100"
-          }`}
-      >
-        Skip Intro [SPACE]
-      </button>
+      {!hasInteracted ? (
+        <div
+          onClick={handleStartIntro}
+          className="absolute inset-0 w-full h-full bg-slate-950 flex flex-col items-center justify-center z-55 cursor-pointer select-none overflow-hidden"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(6,182,212,0.05)_0%,transparent_60%)] animate-pulse pointer-events-none" />
+          <div className="relative font-mono text-sm tracking-[0.4em] text-cyan-400 uppercase animate-[pulse_2s_infinite] text-center px-4 pointer-events-none">
+            —CLICK ANYWHERE TO INITIALIZE—
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Backdrop click area for skipping */}
+          <div
+            onClick={triggerFadeOut}
+            className="absolute inset-0 z-51 cursor-pointer"
+          />
+
+          {/* Hide the skip button smoothly during the fadeout */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerFadeOut();
+            }}
+            className={`absolute bottom-8 right-8 z-55 bg-black/50 hover:bg-violet-600/40 text-slate-300 hover:text-cyan-400 font-mono text-xs tracking-widest uppercase px-5 py-3 rounded-md border border-slate-800 transition-all backdrop-blur-md ${isFadingOut ? "opacity-0 scale-95 pointer-events-none" : "opacity-100"
+              }`}
+          >
+            Skip Intro [SPACE]
+          </button>
+        </>
+      )}
     </div>
   );
 }

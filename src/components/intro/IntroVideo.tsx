@@ -17,7 +17,8 @@ export default function IntroVideo({ onComplete, onSkip }: IntroVideoProps) {
 
         // Force maximum performance bindings
         video.playbackRate = 1.0;
-        video.play().catch((err) => {
+        video.play().catch((err: unknown) => {
+            if (err instanceof DOMException && err.name === 'AbortError') return;
             console.warn("Autoplay blocked by browser policy, executing fallback click-to-play:", err);
         });
 
