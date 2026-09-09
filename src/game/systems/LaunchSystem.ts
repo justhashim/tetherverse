@@ -14,8 +14,6 @@ export class LaunchSystem {
     private dragVector: Phaser.Math.Vector2;
     private launchVelocity: Phaser.Math.Vector2;
 
-    // Visual trajectory components
-    private aimGraphics: Phaser.GameObjects.Graphics;
     private isDragging: boolean = false;
 
     constructor(scene: Phaser.Scene, player: Player) {
@@ -27,10 +25,6 @@ export class LaunchSystem {
         this.currentPoint = new Phaser.Math.Vector2();
         this.dragVector = new Phaser.Math.Vector2();
         this.launchVelocity = new Phaser.Math.Vector2();
-
-        // Single canvas allocation for aiming display lines
-        this.aimGraphics = this.scene.add.graphics();
-        this.aimGraphics.setDepth(100);
 
         this.setupInputListeners();
     }
@@ -63,15 +57,12 @@ export class LaunchSystem {
         if (this.dragVector.length() > GAME_CONSTANTS.LAUNCH.MAX_DRAG_DISTANCE) {
             this.dragVector.setLength(GAME_CONSTANTS.LAUNCH.MAX_DRAG_DISTANCE);
         }
-
-        this.renderAimIndicator();
     }
 
     private onPointerUp(): void {
         if (!this.isDragging) return;
 
         this.isDragging = false;
-        this.aimGraphics.clear();
 
         const dragDistance = this.dragVector.length();
 
@@ -98,49 +89,9 @@ export class LaunchSystem {
         });
     }
 
-    private renderAimIndicator(): void {
-        this.aimGraphics.clear();
-
-        if (!this.isDragging || this.dragVector.length() === 0) return;
-
-        // Draw interactive visual path vectors starting precisely from the center of the physical player body
-        const originX = this.player.x;
-        const originY = this.player.y;
-
-        // Invert directional representation to cleanly visually communicate where the character will fly
-        const visualTarget = new Phaser.Math.Vector2(originX, originY)
-            .add(this.dragVector.clone().negate());
-
-        const distance = this.dragVector.length();
-        const maxDist = GAME_CONSTANTS.LAUNCH.MAX_DRAG_DISTANCE;
-
-        // Dynamic styling transitions: green (low-tier charge) -> bright orange/red (maximum mechanical limit)
-        const interpolationColor = Phaser.Display.Color.Interpolate.ColorWithColor(
-            Phaser.Display.Color.ValueToColor(0x00ffcc), // Cool teal green
-            Phaser.Display.Color.ValueToColor(0xff3333), // Stress red
-            maxDist,
-            distance
-        );
-
-        const hexColor = Phaser.Display.Color.GetColor(
-            interpolationColor.r,
-            interpolationColor.g,
-            interpolationColor.b
-        );
-
-        // Render sleek targeting feedback structures
-        this.aimGraphics.lineStyle(4, hexColor, 0.85);
-        this.aimGraphics.lineBetween(originX, originY, visualTarget.x, visualTarget.y);
-
-        // Render an endpoint target indicator circle tracking the calculated launch vector length
-        this.aimGraphics.fillStyle(hexColor, 1);
-        this.aimGraphics.fillCircle(visualTarget.x, visualTarget.y, 7);
-    }
-
     public destroy(): void {
         this.scene.input.off("pointerdown", this.onPointerDown);
         this.scene.input.off("pointermove", this.onPointerMove);
         this.scene.input.off("pointerup", this.onPointerUp);
-        this.aimGraphics.destroy();
     }
 }

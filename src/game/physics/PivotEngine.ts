@@ -16,15 +16,12 @@ export class PivotEngine {
     private isHooked: boolean = false;
     private jackLength: number = 340; // Comfortably reaches the first anchor from the start platform
     private anchorHitRadius: number = 60; // Forgiving tap detection near the hook node
-    private debugGraphics: Phaser.GameObjects.Graphics;
 
     constructor(scene: Phaser.Scene, player: Player) {
         this.scene = scene;
         this.player = player;
         this.anchorPoint = new Phaser.Math.Vector2();
         this.pointerVector = new Phaser.Math.Vector2();
-
-        this.debugGraphics = this.scene.add.graphics().setDepth(99);
 
         this.scene.matter.body.set(this.player.body, "collisionFilter", {
             category: COLLISION_CHANNELS.PLAYER,
@@ -107,37 +104,17 @@ export class PivotEngine {
     }
 
     public updateEngineRoutines(): void {
-        this.debugGraphics.clear();
         const pointer = this.scene.input.activePointer;
 
-        // Draw your max reach circle
-        // this.debugGraphics.lineStyle(2, 0xffffff, 0.2);
-        // this.debugGraphics.strokeCircle(this.player.x, this.player.y, this.jackLength);
-
-        // The Yellow Aiming Laser (Allows drag-to-scan without hopping)
+        // Drag-to-scan for a wall hook without requiring a fresh tap
         if (pointer.isDown && !this.isHooked) {
             this.attemptAnchor(pointer); // Scans for a wall hook while dragging
-
-            this.pointerVector.set(pointer.worldX - this.player.x, pointer.worldY - this.player.y);
-            if (this.pointerVector.length() > this.jackLength) {
-                this.pointerVector.setLength(this.jackLength);
-            }
-            const previewX = this.player.x + this.pointerVector.x;
-            const previewY = this.player.y + this.pointerVector.y;
-
-            this.debugGraphics.lineStyle(3, 0xffcc00, 0.5);
-            this.debugGraphics.lineBetween(this.player.x, this.player.y, previewX, previewY);
         }
 
         // Early return if not hooked
         if (!this.isHooked || !this.pivotConstraint) return;
 
-        // Draw the actual swinging rope and apply physics
-        this.debugGraphics.lineStyle(5, 0x00ffcc, 1);
-        this.debugGraphics.lineBetween(this.player.x, this.player.y, this.anchorPoint.x, this.anchorPoint.y);
-        this.debugGraphics.fillStyle(0xff3333, 1);
-        this.debugGraphics.fillCircle(this.anchorPoint.x, this.anchorPoint.y, 6);
-
+        // Apply swing drive physics while the pointer is held down
         if (pointer.isDown) {
             const swingRadius = new Phaser.Math.Vector2(
                 this.player.x - this.anchorPoint.x,
@@ -207,6 +184,5 @@ export class PivotEngine {
         this.scene.input.off("pointerdown", this.attemptAnchor);
         this.scene.input.off("pointerup", this.releaseAnchor);
         this.releaseAnchor();
-        this.debugGraphics.destroy();
     }
 }
