@@ -22,8 +22,6 @@ export class GameScene extends Scene {
         'background-blue-stars',
     ];
 
-    private heightText!: Phaser.GameObjects.Text;
-    private maxHeightText!: Phaser.GameObjects.Text;
 
     private groundReferenceY: number = 1200;
     private maxAltitudeMeters: number = 0;
@@ -58,6 +56,19 @@ export class GameScene extends Scene {
         this.loadDatabaseHighScore();
     }
 
+    public dispatchAltitudeUpdate() {
+        if (typeof window !== 'undefined') {
+            const zone = this.levelGenerator ? this.levelGenerator.getZoneName(this.currentAltitudeMeters) : 'SURFACE';
+            window.dispatchEvent(new CustomEvent('tetherverse:altitude-update', {
+                detail: {
+                    altitude: this.currentAltitudeMeters,
+                    maxAltitude: this.maxAltitudeMeters,
+                    zone,
+                }
+            }));
+        }
+    }
+
     // Fetch the high score from the database and update the static variable
     private async loadDatabaseHighScore() {
         try {
@@ -70,17 +81,14 @@ export class GameScene extends Scene {
 
             // If the cloud score is higher than what the local game thinks...
             if (data.success && data.maxAltitude > this.maxAltitudeMeters) {
-
                 // 1. Update the static variable
                 this.maxAltitudeMeters = data.maxAltitude;
 
                 // 2. Sync it back to local storage so the next page refresh is instant
                 localStorage.setItem('maxAltitude', data.maxAltitude.toString());
 
-                // 3. Visually update the UI text if it has been created already
-                if (this.maxHeightText) {
-                    this.maxHeightText.setText(`Max Height: ${this.maxAltitudeMeters}m`);
-                }
+                // 3. Dispatch altitude event to update HUD overlay
+                this.dispatchAltitudeUpdate();
 
                 console.log(`☁️ Cloud Sync Complete: Loaded ${data.maxAltitude}m`);
             }
@@ -268,23 +276,11 @@ export class GameScene extends Scene {
         this.cameras.main.startFollow(this.player, false, 0.08, 0.08);
         this.cameras.main.setFollowOffset(this.cameraFollowOffsetX, 150);
 
-        // Static UI Height Tracker
-        this.heightText = this.add.text(20, 20, "Altitude: 0m", {
-            fontSize: "24px",
-            fontFamily: "monospace",
-            color: "#ffffff"
-        }).setScrollFactor(0);
-
-        // Max Height Tracker
-        this.maxHeightText = this.add.text(20, 50, `Max Height: ${this.maxAltitudeMeters}m`, {
-            fontSize: "18px",
-            fontFamily: "monospace",
-            color: "#FF0000"
-        }).setScrollFactor(0);
-
         this.runLowestY = this.groundReferenceY;
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
+
+        this.dispatchAltitudeUpdate();
 
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('tetherverse:game-ready'));
@@ -338,22 +334,22 @@ export class GameScene extends Scene {
             this.player.updateOpticalFlow(delta, routeDir, activeAnchor, isHooked);
 
             // Altimeter calculation routines
-            if (this.heightText) {
-                const pixelHeight = (this.groundReferenceY - this.player.y) - 20;
-                const altitudeMeters = Math.max(0, Math.floor(pixelHeight / 10));
+            const pixelHeight = (this.groundReferenceY - this.player.y) - 20;
+            const altitudeMeters = Math.max(0, Math.floor(pixelHeight / 10));
 
-                // Live altitude drives difficulty tier selection and the rising death-zone
-                this.currentAltitudeMeters = altitudeMeters;
-                this.heightText.setText(`Altitude: ${altitudeMeters}m`);
+            const altitudeChanged = altitudeMeters !== this.currentAltitudeMeters;
+            this.currentAltitudeMeters = altitudeMeters;
 
-                if (altitudeMeters > this.maxAltitudeMeters) {
-                    this.maxAltitudeMeters = altitudeMeters;
-
-                    // Bulletproof persistent save
+            if (altitudeMeters > this.maxAltitudeMeters) {
+                this.maxAltitudeMeters = altitudeMeters;
+                try {
                     localStorage.setItem('maxAltitude', this.maxAltitudeMeters.toString());
-
-                    this.maxHeightText.setText(`Max Height: ${this.maxAltitudeMeters}m`);
+                } catch {
+                    // ignore
                 }
+                this.dispatchAltitudeUpdate();
+            } else if (altitudeChanged) {
+                this.dispatchAltitudeUpdate();
             }
 
             // Track the highest point reached this specific run (Y decreases as you climb)

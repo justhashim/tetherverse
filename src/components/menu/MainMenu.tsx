@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import ProfileCard from "./ProfileCard";
 import MultiverseBackground from "./MultiverseBackground";
@@ -9,83 +10,137 @@ interface MainMenuProps {
     onPlay: () => void;
     onOpenLeaderboard: () => void;
     onLogout: () => void;
-    user: { name: string; image?: string };
+    user: { name: string; image?: string | null };
+    bestAltitude?: number;
 }
 
-export default function MainMenu({ onPlay, onOpenLeaderboard, onLogout, user }: MainMenuProps) {
+export default function MainMenu({
+    onPlay,
+    onOpenLeaderboard,
+    onLogout,
+    user,
+    bestAltitude = 0
+}: MainMenuProps) {
+
+    // Keyboard navigation: Enter launches game
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onPlay();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onPlay]);
+
     return (
-        <div className="relative w-screen h-screen overflow-hidden flex flex-col justify-between p-8 z-10 select-none bg-radial-dark">
+        <div className="relative w-screen h-screen overflow-hidden flex flex-col justify-between p-6 md:p-8 z-10 select-none bg-radial-dark">
             <MultiverseBackground />
 
             {/* TOP BAR INFRASTRUCTURE */}
-            <header className="w-full flex justify-between items-start z-20">
-                <ProfileCard user={user} onLogout={onLogout} />
-                <div className="flex gap-4">
-                    <button className="p-3 rounded-lg bg-slate-900/40 hover:bg-slate-800/60 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all backdrop-blur-sm">
-                        ⚙️
-                    </button>
+            <header className="w-full flex justify-between items-center z-20">
+                <ProfileCard user={user} bestAltitude={bestAltitude} onLogout={onLogout} />
+                <div className="hidden sm:flex items-center gap-3 font-mono text-[11px] bg-slate-950/60 border border-slate-800/80 px-4 py-2 rounded-xl backdrop-blur-md">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-slate-400">SECTOR // <span className="text-cyan-300 font-bold">07-GRAVITY</span></span>
                 </div>
             </header>
 
-            {/* HERO HERO BRANDING CENTRIC SECTION */}
-            <main className="w-full flex flex-col items-center justify-center my-auto z-20 text-center">
+            {/* HERO BRANDING CENTRIC SECTION */}
+            <main className="w-full flex flex-col items-center justify-center my-auto z-20 text-center px-4">
+                {/* Multiverse Ω Logo Node */}
                 <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
+                    initial={{ scale: 0.85, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative mb-6 group"
+                    transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
+                    className="relative mb-5 group"
                 >
-                    {/* Multiverse Glowing Ring Aura */}
-                    <div className="absolute inset-0 rounded-full bg-linear-to-tr from-violet-600 via-cyan-500 to-magenta-500 blur-3xl opacity-20 group-hover:opacity-35 transition-opacity duration-1000 scale-110 animate-pulse" />
+                    {/* Glowing Aura */}
+                    <div className="absolute inset-0 rounded-full bg-linear-to-tr from-violet-600 via-cyan-500 to-fuchsia-500 blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-700 scale-110 animate-pulse" />
 
-                    {/* Massive Graphic Logo Node */}
-                    <div className="relative w-48 h-48 md:w-56 md:h-56 rounded-full border border-cyan-500/30 bg-slate-950/80 backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.15)] flex items-center justify-center overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('/images/vortex.png')] bg-cover opacity-10 animate-[spin_60s_linear_infinite]" />
-                        <div className="absolute w-4/5 h-4/5 rounded-full border border-dashed border-violet-500/20 animate-[spin_40s_linear_infinite_reverse]" />
-                        <span className="text-6xl font-black text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 tracking-tighter z-10 select-none">
+                    {/* Emblem Node */}
+                    <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full border border-cyan-500/30 bg-slate-950/80 backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)] flex items-center justify-center overflow-hidden">
+                        <div className="absolute inset-2 border border-dashed border-violet-500/30 rounded-full animate-[spin_40s_linear_infinite]" />
+                        <div className="absolute inset-5 border border-cyan-500/20 rounded-full animate-[spin_25s_linear_infinite_reverse]" />
+                        <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-linear-to-b from-white via-cyan-100 to-slate-400 tracking-tighter z-10 select-none">
                             Ω
                         </span>
                     </div>
                 </motion.div>
 
+                {/* Title */}
                 <motion.h1
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.8 }}
-                    className="text-6xl md:text-8xl font-black text-white tracking-tighter uppercase font-sans mb-3 select-none"
+                    transition={{ delay: 0.15, duration: 0.8 }}
+                    className="text-5xl md:text-7xl lg:text-8xl font-black text-white tracking-tight uppercase font-sans mb-2 select-none"
                 >
                     Tether<span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 via-violet-400 to-fuchsia-500">verse</span>
                 </motion.h1>
 
+                {/* Subtitle */}
                 <motion.p
                     initial={{ y: 15, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3, duration: 0.8 }}
-                    className="font-mono text-xs md:text-sm text-cyan-400/70 tracking-[0.4em] uppercase mb-12 select-none"
+                    transition={{ delay: 0.25, duration: 0.8 }}
+                    className="font-mono text-xs md:text-sm text-cyan-400/80 tracking-[0.35em] uppercase mb-8 select-none"
                 >
-                    Quantum Singularity Climbing Loop
+                    {"// Quantum Singularity Ascent Simulator"}
                 </motion.p>
 
-                {/* CALL TO ACTIONS */}
+                {/* Main Action Buttons */}
                 <motion.div
-                    initial={{ y: 30, opacity: 0 }}
+                    initial={{ y: 25, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.4, duration: 0.8 }}
-                    className="flex flex-col sm:flex-row items-center gap-6"
+                    transition={{ delay: 0.35, duration: 0.8 }}
+                    className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-8 w-full sm:w-auto"
                 >
                     <AnimatedButton onClick={onPlay} variant="primary">
-                        INITIALIZE ASCENT
+                        INITIALIZE ASCENT [↵]
                     </AnimatedButton>
                     <AnimatedButton onClick={onOpenLeaderboard} variant="secondary">
-                        LEADERBOARD TELEMETRY
+                        TELEMETRY MATRIX
                     </AnimatedButton>
+                </motion.div>
+
+                {/* Compact Control Hints */}
+                <motion.div
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.45, duration: 0.8 }}
+                    className="hidden md:flex items-center gap-4 font-mono text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl shadow-lg"
+                >
+                    <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-900 border border-slate-700 text-cyan-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                            HOLD CLICK / SPACE
+                        </span>
+                        <span>Grapple</span>
+                    </div>
+                    <span className="text-slate-600">•</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-900 border border-slate-700 text-violet-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                            RELEASE
+                        </span>
+                        <span>Angular Launch</span>
+                    </div>
+                    <span className="text-slate-600">•</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-900 border border-slate-700 text-fuchsia-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                            A / D
+                        </span>
+                        <span>Optical Flow</span>
+                    </div>
                 </motion.div>
             </main>
 
             {/* FOOTER METADATA ENGINE */}
-            <footer className="w-full flex justify-between items-center z-20 font-mono text-[10px] text-slate-500 tracking-wider">
-                <span>SYSTEM NODE: ACTIVE</span>
-                <span>v2.0.26 // QUANTUM_BUILD</span>
+            <footer className="w-full flex justify-between items-center z-20 font-mono text-[10px] md:text-xs text-slate-500 tracking-wider">
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>SYSTEM CORE // ONLINE</span>
+                </div>
+                <span>v2.4.0-QUANTUM</span>
             </footer>
         </div>
     );

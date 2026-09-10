@@ -729,6 +729,15 @@ export class LevelGenerator {
         return d.ENDLESS as DifficultyProfile;
     }
 
+    public getZoneName(altitudeMeters: number): string {
+        const a = GAME_CONSTANTS.ALTITUDE;
+        if (altitudeMeters < a.INTERMEDIATE_ZONE) return "SURFACE";
+        if (altitudeMeters < a.HARD_ZONE) return "TROPOSPHERE";
+        if (altitudeMeters < a.EXPERT_ZONE) return "STRATOSPHERE";
+        if (altitudeMeters < a.ENDLESS_ZONE) return "MESOSPHERE";
+        return "EXOSPHERE";
+    }
+
     // =====================================================================
     //  Pattern table - each pattern encodes a gameplay rhythm
     // =====================================================================
