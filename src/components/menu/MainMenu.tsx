@@ -157,7 +157,7 @@ export default function MainMenu({
                 >
                     <AnimatedButton onClick={onPlay} variant="primary" className="w-full">
                         <span>▶ INITIALIZE ASCENT</span>
-                        <span className="text-[10px] bg-black/30 border border-white/20 px-1.5 py-0.5 rounded font-mono font-normal text-cyan-200 hidden sm:inline">
+                        <span className="text-[10px] bg-zinc-200/80 border border-zinc-300 text-zinc-800 px-1.5 py-0.5 rounded font-mono font-semibold hidden sm:inline">
                             ↵
                         </span>
                     </AnimatedButton>

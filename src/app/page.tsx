@@ -125,10 +125,13 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
               e.stopPropagation();
               triggerFadeOut();
             }}
-            className={`absolute bottom-8 right-8 z-55 bg-black/60 hover:bg-violet-600/40 text-slate-300 hover:text-cyan-300 font-mono text-xs tracking-widest uppercase px-5 py-3 rounded-xl border border-slate-800 transition-all backdrop-blur-md ${isFadingOut ? "opacity-0 scale-95 pointer-events-none" : "opacity-100"
+            className={`group absolute bottom-8 right-8 z-55 flex items-center gap-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white font-mono text-xs tracking-wider uppercase px-4 py-2.5 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-all duration-150 backdrop-blur-md shadow-sm active:scale-[0.98] cursor-pointer select-none ${isFadingOut ? "opacity-0 scale-95 pointer-events-none" : "opacity-100"
               }`}
           >
-            SKIP INTRO [SPACE]
+            <span>SKIP INTRO</span>
+            <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded">
+              SPACE
+            </span>
           </button>
         </>
       )}
@@ -300,7 +303,7 @@ export default function Home() {
 
           <button
             onClick={handleLogin}
-            className="group relative w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-950 font-mono font-bold text-sm tracking-wider uppercase px-6 py-4 rounded-xl transition-all duration-300 shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_35px_rgba(255,255,255,0.3)] active:scale-95 cursor-pointer"
+            className="group relative w-full flex items-center justify-center gap-3 bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 font-mono font-bold text-sm tracking-wider uppercase px-6 py-3.5 rounded-xl border border-zinc-200 transition-colors duration-150 shadow-sm active:scale-[0.98] cursor-pointer select-none"
           >
             {/* Google "G" SVG */}
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -450,19 +453,19 @@ export default function Home() {
                 <div className="mt-7 flex flex-col gap-3">
                   <button
                     onClick={handleRerun}
-                    className="group relative bg-linear-to-r from-cyan-500 to-violet-600 hover:from-cyan-400 hover:to-violet-500 text-white px-8 py-3.5 rounded-xl font-mono font-black text-sm tracking-widest hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all active:scale-95 border border-cyan-400/30 flex items-center justify-center gap-2 cursor-pointer"
+                    className="group relative w-full bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-950 px-8 py-3.5 rounded-xl font-mono font-bold text-sm tracking-wider uppercase border border-zinc-200 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer select-none"
                   >
                     <span>▶ RE-ENGAGE ASCENT</span>
-                    <span className="text-[10px] bg-black/30 px-1.5 py-0.5 rounded font-normal text-cyan-200">
+                    <span className="text-[10px] bg-zinc-200/80 border border-zinc-300 text-zinc-800 px-1.5 py-0.5 rounded font-mono font-semibold">
                       SPACE / ↵
                     </span>
                   </button>
                   <button
                     onClick={handleExitToLauncher}
-                    className="bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white px-8 py-3 rounded-xl font-mono font-bold text-xs tracking-widest transition-all active:scale-95 border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-zinc-900/90 hover:bg-zinc-800 active:bg-zinc-950 text-zinc-200 hover:text-white px-8 py-3 rounded-xl font-mono font-semibold text-xs tracking-wider uppercase border border-zinc-800 hover:border-zinc-700 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer select-none"
                   >
                     <span>RETURN TO LAUNCHER</span>
-                    <span className="text-[10px] text-slate-500">[ESC]</span>
+                    <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded font-mono font-normal">ESC</span>
                   </button>
                 </div>
               </div>

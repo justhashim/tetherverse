@@ -12,14 +12,11 @@ export default function SkipButton({ onClick }: SkipButtonProps) {
                 e.stopPropagation();
                 onClick();
             }}
-            className="group relative flex items-center gap-2 bg-black/40 hover:bg-violet-600/30 text-slate-300 hover:text-cyan-400 font-mono text-xs uppercase tracking-widest px-5 py-3 rounded-md border border-slate-800 hover:border-cyan-500/30 transition-all duration-300 backdrop-blur-md overflow-hidden shadow-2xl select-none"
+            className="group relative flex items-center gap-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white font-mono text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors duration-150 backdrop-blur-md shadow-sm active:scale-[0.98] cursor-pointer select-none"
         >
-            {/* Light sweep animation overlay effect on hover */}
-            <span className="absolute inset-0 w-full h-full bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
-
             <span>Skip Sequence</span>
 
-            <span className="text-[10px] bg-slate-900 group-hover:bg-cyan-950 px-1.5 py-0.5 rounded border border-slate-800 group-hover:border-cyan-500/20 text-slate-500 group-hover:text-cyan-400 transition-colors">
+            <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded font-mono">
                 SPACE
             </span>
         </button>

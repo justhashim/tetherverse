@@ -97,12 +97,12 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                 {/* Abort Ascent Action */}
                 <button
                     onClick={onAbort}
-                    className="pointer-events-auto group flex items-center gap-2.5 bg-slate-950/70 hover:bg-red-950/50 border border-slate-800/80 hover:border-red-500/40 text-slate-400 hover:text-red-300 px-4 py-2.5 rounded-xl font-mono text-xs font-bold tracking-wider backdrop-blur-md transition-all duration-200 shadow-xl hover:shadow-[0_0_20px_rgba(239,68,68,0.2)] active:scale-95"
+                    className="pointer-events-auto group flex items-center gap-2.5 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-rose-900/50 text-zinc-400 hover:text-rose-200 px-3.5 py-2 rounded-xl font-mono text-xs font-semibold tracking-wider backdrop-blur-md transition-all duration-150 shadow-sm active:scale-[0.98] cursor-pointer select-none"
                     aria-label="Abort Current Ascent"
                 >
                     <span className="text-base group-hover:-translate-x-0.5 transition-transform">←</span>
                     <span>ABORT ASCENT</span>
-                    <span className="text-[10px] bg-slate-900 group-hover:bg-red-900/60 text-slate-500 group-hover:text-red-300 px-1.5 py-0.5 rounded border border-slate-800 group-hover:border-red-500/30">
+                    <span className="text-[10px] bg-zinc-900 group-hover:bg-rose-950/60 text-zinc-500 group-hover:text-rose-300 px-1.5 py-0.5 rounded border border-zinc-800 group-hover:border-rose-800/40">
                         ESC
                     </span>
                 </button>
@@ -120,7 +120,7 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                     {/* Main Digital Altitude Metric */}
                     <div className="flex items-baseline gap-1">
                         <span className="font-mono text-xs text-slate-500 tracking-widest uppercase mr-1">ALT</span>
-                        <span className="font-mono font-black text-3xl md:text-4xl text-transparent bg-clip-text bg-linear-to-r from-white via-cyan-100 to-cyan-400 tracking-tight drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+                        <span className="font-mono font-black text-3xl md:text-4xl text-white tracking-tight">
                             {altitude.toLocaleString().padStart(4, '0')}
                         </span>
                         <span className="font-mono font-bold text-cyan-400 text-sm md:text-base tracking-wide">
@@ -148,8 +148,8 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
             {hazardAlert && (
                 <div className="w-full flex justify-center mt-2 md:mt-3 pointer-events-none transition-all duration-300 animate-bounce">
                     <div className={`flex items-center gap-3 px-4 md:px-5 py-2 md:py-2.5 rounded-2xl border backdrop-blur-xl shadow-2xl font-mono tracking-wider ${hazardAlert.severity === 'danger'
-                            ? 'bg-rose-950/85 border-rose-500/80 text-rose-200 shadow-[0_0_25px_rgba(244,63,94,0.4)]'
-                            : 'bg-amber-950/85 border-amber-500/80 text-amber-200 shadow-[0_0_25px_rgba(245,158,11,0.4)]'
+                        ? 'bg-rose-950/85 border-rose-500/80 text-rose-200 shadow-[0_0_25px_rgba(244,63,94,0.4)]'
+                        : 'bg-amber-950/85 border-amber-500/80 text-amber-200 shadow-[0_0_25px_rgba(245,158,11,0.4)]'
                         }`}>
                         <span className="text-lg md:text-xl animate-pulse">
                             {hazardAlert.severity === 'danger' ? '☣️' : '⚠️'}

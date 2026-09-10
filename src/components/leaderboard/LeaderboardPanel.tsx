@@ -73,9 +73,10 @@ export default function LeaderboardPanel({ onClose, currentUserId }: Leaderboard
                         </div>
                         <button
                             onClick={onClose}
-                            className="font-mono text-xs border border-slate-800 hover:border-cyan-500/40 px-3 py-1.5 rounded-lg bg-slate-900/80 text-slate-400 hover:text-cyan-300 transition-all active:scale-95"
+                            className="flex items-center gap-1.5 font-mono text-xs border border-zinc-800 hover:border-zinc-700 px-3 py-1.5 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors duration-150 active:scale-[0.98] shadow-sm cursor-pointer select-none"
                         >
-                            [ESC] RETURN
+                            <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1 py-0.5 rounded font-mono">ESC</span>
+                            <span>RETURN</span>
                         </button>
                     </div>
 
