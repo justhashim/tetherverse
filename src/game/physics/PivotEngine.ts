@@ -17,6 +17,15 @@ export class PivotEngine {
     private jackLength: number = GAME_CONSTANTS.PROCEDURAL.ROPE_LENGTH; // Matches procedural generation reach
     private anchorHitRadius: number = 140; // Forgiving tap detection near hook nodes
 
+    // --- Unstable Quantum Anchor Decay State ---
+    private isUnstableHooked: boolean = false;
+    private unstableTimer: number = 0;
+    private readonly UNSTABLE_MAX_DURATION: number = 2200; // 2.2s before hook decay and snap
+    private currentHookedAnchorBody: MatterJS.BodyType | null = null;
+
+    private readonly pointerDownHandler = (pointer: Phaser.Input.Pointer) => this.attemptAnchor(pointer);
+    private readonly pointerUpHandler = () => this.releaseAnchor();
+
     constructor(scene: Phaser.Scene, player: Player) {
         this.scene = scene;
         this.player = player;
@@ -25,16 +34,15 @@ export class PivotEngine {
 
         this.scene.matter.body.set(this.player.body, "collisionFilter", {
             category: COLLISION_CHANNELS.PLAYER,
-            mask: COLLISION_CHANNELS.TERRAIN
+            mask: COLLISION_CHANNELS.TERRAIN | COLLISION_CHANNELS.HAZARD
         });
 
         this.setupInputBindings();
     }
 
     private setupInputBindings(): void {
-        // Pass 'true' to indicate this is a fresh, initial tap
-        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.attemptAnchor(pointer), this);
-        this.scene.input.on("pointerup", this.releaseAnchor, this);
+        this.scene.input.on("pointerdown", this.pointerDownHandler, this);
+        this.scene.input.on("pointerup", this.pointerUpHandler, this);
     }
 
     private attemptAnchor(pointer: Phaser.Input.Pointer): void {
@@ -45,7 +53,7 @@ export class PivotEngine {
         const playerY = this.player.body.position.y;
 
         const hookAnchors = this.scene.matter.world.getAllBodies().filter(
-            (body: MatterJS.BodyType) => body.label === 'HookAnchor'
+            (body: MatterJS.BodyType) => body.label === 'HookAnchor' || body.label === 'HookAnchor_Unstable'
         );
 
         let aimedAnchor: MatterJS.BodyType | null = null;
@@ -102,6 +110,11 @@ export class PivotEngine {
 
         this.anchorPoint.set(aimedAnchor.position.x, aimedAnchor.position.y);
         this.isHooked = true;
+        this.currentHookedAnchorBody = aimedAnchor;
+        this.isUnstableHooked = aimedAnchor.label === 'HookAnchor_Unstable';
+        if (this.isUnstableHooked) {
+            this.unstableTimer = this.UNSTABLE_MAX_DURATION;
+        }
         this.player.updateState("LAUNCHED");
 
         this.pivotConstraint = this.scene.matter.add.constraint(
@@ -121,7 +134,7 @@ export class PivotEngine {
         );
     }
 
-    public updateEngineRoutines(): void {
+    public updateEngineRoutines(delta: number = 16.6): void {
         const pointer = this.scene.input.activePointer;
 
         // Drag-to-scan for a wall hook without requiring a fresh tap
@@ -131,6 +144,30 @@ export class PivotEngine {
 
         // Early return if not hooked
         if (!this.isHooked || !this.pivotConstraint) return;
+
+        // Handle unstable anchor decay and visual countdown
+        if (this.isUnstableHooked && this.currentHookedAnchorBody) {
+            this.unstableTimer -= delta;
+
+            const anchorGameObject = (this.currentHookedAnchorBody as { gameObject?: Phaser.GameObjects.Image }).gameObject;
+            if (anchorGameObject && anchorGameObject.active) {
+                if (this.unstableTimer < 700) {
+                    // Critical countdown: frantic strobe
+                    const strobe = Math.floor(this.unstableTimer / 70) % 2 === 0;
+                    anchorGameObject.setTint(strobe ? 0xffffff : 0xff0044);
+                } else {
+                    // Decay pulse: cycling between neon magenta and amber warning
+                    const pulse = Math.sin((this.UNSTABLE_MAX_DURATION - this.unstableTimer) * 0.015);
+                    anchorGameObject.setTint(pulse > 0 ? 0xff0066 : 0xff6600);
+                }
+            }
+
+            if (this.unstableTimer <= 0) {
+                this.shatterCurrentAnchor();
+                this.forceRelease();
+                return;
+            }
+        }
 
         // Apply swing drive physics while the pointer is held down
         if (pointer.isDown) {
@@ -180,12 +217,66 @@ export class PivotEngine {
         return this.isHooked;
     }
 
+    public isAttachedToUnstable(): boolean {
+        return this.isHooked && this.isUnstableHooked;
+    }
+
+    public getUnstableProgress(): number {
+        if (!this.isHooked || !this.isUnstableHooked) return 0;
+        return Math.max(0, this.unstableTimer / this.UNSTABLE_MAX_DURATION);
+    }
+
+    private shatterCurrentAnchor(): void {
+        if (!this.currentHookedAnchorBody) return;
+        const anchorX = this.currentHookedAnchorBody.position.x;
+        const anchorY = this.currentHookedAnchorBody.position.y;
+        const anchorGameObject = (this.currentHookedAnchorBody as { gameObject?: Phaser.GameObjects.Image }).gameObject;
+
+        this.scene.cameras.main.shake(160, 0.008);
+
+        const shatterRing = this.scene.add.circle(anchorX, anchorY, 15, 0xff0055, 0.85).setDepth(25);
+        this.scene.tweens.add({
+            targets: shatterRing,
+            scale: 3,
+            alpha: 0,
+            duration: 350,
+            ease: 'Power2',
+            onComplete: () => shatterRing.destroy()
+        });
+
+        this.scene.matter.world.remove(this.currentHookedAnchorBody);
+        if (anchorGameObject && anchorGameObject.destroy) {
+            anchorGameObject.destroy();
+        }
+        this.currentHookedAnchorBody = null;
+    }
+
+    public forceRelease(): void {
+        if (!this.isHooked) return;
+
+        this.isHooked = false;
+        this.isUnstableHooked = false;
+        this.currentHookedAnchorBody = null;
+        this.unstableTimer = 0;
+        this.anchorPoint.set(0, 0);
+
+        if (this.pivotConstraint) {
+            this.scene.matter.world.remove(this.pivotConstraint);
+            this.pivotConstraint = null;
+        }
+
+        this.player.updateState("FALLING");
+    }
+
     private releaseAnchor(): void {
         if (!this.isHooked) return;
 
         const swingVelocity = this.player.body.velocity;
 
         this.isHooked = false;
+        this.isUnstableHooked = false;
+        this.currentHookedAnchorBody = null;
+        this.unstableTimer = 0;
         this.anchorPoint.set(0, 0);
         if (this.pivotConstraint) {
             this.scene.matter.world.remove(this.pivotConstraint);
@@ -221,8 +312,8 @@ export class PivotEngine {
     }
 
     public destroy(): void {
-        this.scene.input.off("pointerdown", this.attemptAnchor);
-        this.scene.input.off("pointerup", this.releaseAnchor);
+        this.scene.input.off("pointerdown", this.pointerDownHandler, this);
+        this.scene.input.off("pointerup", this.pointerUpHandler, this);
         this.releaseAnchor();
     }
 }

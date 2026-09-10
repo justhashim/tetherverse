@@ -2,6 +2,7 @@
 
 import Phaser from "phaser";
 import { BasePlatform } from "../terrain/BasePlatform";
+import { CosmicHazard } from "../terrain/CosmicHazard";
 import { GAME_CONSTANTS } from "../config/game-constants";
 import { COLLISION_CHANNELS } from "../config/physics-channels";
 import { createSeededRng, type Rng } from "./seeded-random";
@@ -99,6 +100,7 @@ export class LevelGenerator {
     private readonly scene: Phaser.Scene;
     private readonly platforms: BasePlatform[];
     private readonly hookNodes: Phaser.Physics.Matter.Image[] = [];
+    private readonly hazards: CosmicHazard[] = [];
     private readonly rng: Rng;
     private readonly maxReach: number;
     private readonly ropeLength: number;
@@ -110,6 +112,7 @@ export class LevelGenerator {
     private committedCount: number = 0;
     private lastPattern: PatternId | null = null;
     private currentProfile: DifficultyProfile;
+    private currentAltitudeMeters: number = 0;
     private currentDirection: number = 1; // 1 = ascending rightward, -1 = ascending leftward
     private stepsInDirection: number = 0;
 
@@ -194,6 +197,7 @@ export class LevelGenerator {
 
     // --- Public update: keep a distance-based lookahead ahead, then cull behind. ---
     public update(playerX: number, playerY: number, altitudeMeters: number): void {
+        this.currentAltitudeMeters = altitudeMeters;
         this.currentProfile = this.getProfile(altitudeMeters);
 
         const proc = GAME_CONSTANTS.PROCEDURAL;
@@ -569,15 +573,27 @@ export class LevelGenerator {
         profile: DifficultyProfile,
         spec: PatternSpec
     ): void {
+        // Roll crumbling platform chance at higher altitudes (starts at 220m)
+        let isCrumbling = false;
+        if (this.currentAltitudeMeters >= 220 && !spec.risk && !spec.recovery) {
+            const crumbleChance = this.currentAltitudeMeters >= 700 ? 0.40
+                : this.currentAltitudeMeters >= 450 ? 0.30
+                    : 0.20;
+            isCrumbling = this.rng() < crumbleChance;
+        }
+
         const platform = new BasePlatform(
             this.scene,
             candidate.x,
             candidate.y,
             candidate.width,
             candidate.height,
-            { friction: 0.9, restitution: 0.05 }
+            { friction: 0.9, restitution: 0.05, isCrumbling }
         );
         this.platforms.push(platform);
+
+        // Maybe spawn Cosmic Hazard in the traversal gap
+        this.maybeSpawnHazard(prevX, prevY, candidate.x, candidate.y);
 
         const deltaX = candidate.x - prevX;
 
@@ -620,6 +636,39 @@ export class LevelGenerator {
         this.headY = candidate.y;
         this.prevHeight = candidate.height;
         this.committedCount += 1;
+    }
+
+    private maybeSpawnHazard(prevX: number, prevY: number, candX: number, candY: number): void {
+        if (this.currentAltitudeMeters < 200) return;
+
+        const dist = Math.hypot(candX - prevX, candY - prevY);
+        if (dist < 200) return;
+
+        const hazardChance = this.currentAltitudeMeters >= 1000 ? 0.65
+            : this.currentAltitudeMeters >= 500 ? 0.45
+                : 0.30;
+
+        if (this.rng() > hazardChance) return;
+
+        // Position mid-air between platforms, offset slightly from direct line of flight
+        const midX = (prevX + candX) / 2 + this.between(-30, 30);
+        const midY = (prevY + candY) / 2 + this.between(-25, 25);
+
+        const textureKey = this.rng() < 0.5 ? 'hazard-asteroid-1' : 'hazard-asteroid-2';
+        const patrolDistance = this.between(60, 140);
+        const axis: 'x' | 'y' = this.rng() < 0.35 ? 'y' : 'x';
+        const speed = this.between(0.002, 0.0035);
+
+        const hazard = new CosmicHazard(
+            this.scene,
+            midX,
+            midY,
+            textureKey,
+            patrolDistance,
+            axis,
+            speed
+        );
+        this.hazards.push(hazard);
     }
 
     // Recovery platform & hook spawned below the mainline to save missed jumps
@@ -713,6 +762,18 @@ export class LevelGenerator {
                 this.hookNodes.splice(i, 1);
             }
         }
+
+        for (let i = this.hazards.length - 1; i >= 0; i--) {
+            const h = this.hazards[i];
+            if (!h || !h.active) {
+                this.hazards.splice(i, 1);
+                continue;
+            }
+            if (h.y - playerY > cullDist + 300) {
+                h.destroy();
+                this.hazards.splice(i, 1);
+            }
+        }
     }
 
     // =====================================================================
@@ -789,11 +850,23 @@ export class LevelGenerator {
         this.spawnHookAnchor(platformX + horizontalOffset, platformY - verticalOffset);
     }
 
-    private spawnHookAnchor(x: number, y: number): void {
+    private spawnHookAnchor(x: number, y: number, forceUnstable?: boolean): Phaser.Physics.Matter.Image {
+        let isUnstable = false;
+        if (forceUnstable !== undefined) {
+            isUnstable = forceUnstable;
+        } else if (this.currentAltitudeMeters >= 120) {
+            const roll = this.rng();
+            const threshold = this.currentAltitudeMeters >= 700 ? 0.55
+                : this.currentAltitudeMeters >= 350 ? 0.35
+                    : 0.20;
+            isUnstable = roll < threshold;
+        }
+
+        const label = isUnstable ? 'HookAnchor_Unstable' : 'HookAnchor';
         const node = this.scene.matter.add.image(x, y, 'hook_node', undefined, {
             isStatic: true,
             isSensor: true,
-            label: 'HookAnchor',
+            label,
             collisionFilter: {
                 category: COLLISION_CHANNELS.HOOK_NODE,
                 mask: 0
@@ -802,7 +875,37 @@ export class LevelGenerator {
 
         node.setDisplaySize(80, 80);
         node.setDepth(20);
+
+        if (isUnstable) {
+            // Distinct unstable visual: neon magenta tint and breathing pulse
+            node.setTint(0xff0066);
+            this.scene.tweens.add({
+                targets: node,
+                alpha: 0.65,
+                duration: 450,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+
         this.hookNodes.push(node);
+        return node;
+    }
+
+    public getHazards(): readonly CosmicHazard[] {
+        return this.hazards;
+    }
+
+    public destroyAll(): void {
+        for (const h of this.hazards) {
+            if (h && h.active) h.destroy();
+        }
+        this.hazards.length = 0;
+        for (const n of this.hookNodes) {
+            if (n && n.active) n.destroy();
+        }
+        this.hookNodes.length = 0;
     }
 
     private between(min: number, max: number): number {

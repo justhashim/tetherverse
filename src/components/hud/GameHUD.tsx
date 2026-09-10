@@ -12,6 +12,13 @@ interface AltitudeDetail {
     zone: string;
 }
 
+interface HazardAlert {
+    title: string;
+    message: string;
+    severity?: 'warning' | 'danger';
+    durationMs?: number;
+}
+
 export default function GameHUD({ onAbort }: GameHUDProps) {
     const [altitude, setAltitude] = useState<number>(0);
     const [maxAltitude, setMaxAltitude] = useState<number>(() => {
@@ -22,6 +29,7 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         return 0;
     });
     const [zone, setZone] = useState<string>('SURFACE');
+    const [hazardAlert, setHazardAlert] = useState<HazardAlert | null>(null);
 
     useEffect(() => {
         const handleAltitudeUpdate = (e: Event) => {
@@ -33,6 +41,18 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
             }
         };
 
+        let alertTimer: NodeJS.Timeout | null = null;
+        const handleHazardAlert = (e: Event) => {
+            const detail = (e as CustomEvent<HazardAlert>).detail;
+            if (detail) {
+                setHazardAlert(detail);
+                if (alertTimer) clearTimeout(alertTimer);
+                alertTimer = setTimeout(() => {
+                    setHazardAlert(null);
+                }, detail.durationMs || 3500);
+            }
+        };
+
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -41,10 +61,13 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         };
 
         window.addEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
+        window.addEventListener('tetherverse:hazard-alert', handleHazardAlert);
         window.addEventListener('keydown', handleKeyDown);
 
         return () => {
+            if (alertTimer) clearTimeout(alertTimer);
             window.removeEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
+            window.removeEventListener('tetherverse:hazard-alert', handleHazardAlert);
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [onAbort]);
@@ -120,6 +143,28 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                     </div>
                 </div>
             </header>
+
+            {/* Cybernetic Hazard Warning Banner */}
+            {hazardAlert && (
+                <div className="w-full flex justify-center mt-2 md:mt-3 pointer-events-none transition-all duration-300 animate-bounce">
+                    <div className={`flex items-center gap-3 px-4 md:px-5 py-2 md:py-2.5 rounded-2xl border backdrop-blur-xl shadow-2xl font-mono tracking-wider ${hazardAlert.severity === 'danger'
+                            ? 'bg-rose-950/85 border-rose-500/80 text-rose-200 shadow-[0_0_25px_rgba(244,63,94,0.4)]'
+                            : 'bg-amber-950/85 border-amber-500/80 text-amber-200 shadow-[0_0_25px_rgba(245,158,11,0.4)]'
+                        }`}>
+                        <span className="text-lg md:text-xl animate-pulse">
+                            {hazardAlert.severity === 'danger' ? '☣️' : '⚠️'}
+                        </span>
+                        <div className="flex flex-col text-left">
+                            <span className="font-black uppercase tracking-widest text-[11px] text-white">
+                                {hazardAlert.title}
+                            </span>
+                            <span className="text-[10px] opacity-90">
+                                {hazardAlert.message}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Bottom Floating Control HUD */}
             <footer className="w-full flex justify-center pb-2">

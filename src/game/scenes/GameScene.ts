@@ -32,6 +32,8 @@ export class GameScene extends Scene {
 
     private isGameOver: boolean = false;
     private cameraFollowOffsetX: number = 0;
+    private announcedAlerts: Set<string> = new Set();
+    private lastHazardImpactTime: number = 0;
 
     constructor() {
         super("GameScene");
@@ -101,6 +103,8 @@ export class GameScene extends Scene {
         this.load.image('game-background', '/background/background.png');
         this.load.image('background-asteroid-1', '/background/objects/asteroid-1.png');
         this.load.image('background-asteroid-2', '/background/objects/asteroid-2.png');
+        this.load.image('hazard-asteroid-1', '/background/objects/asteroid-1.png');
+        this.load.image('hazard-asteroid-2', '/background/objects/asteroid-2.png');
         this.load.image('background-blue-stars', '/background/objects/blue-stars.png');
         // this.load.image('background-blue-with-stars', '/background/objects/blue-with-stars.png');
         this.load.image('background-planet-big', '/background/objects/prop-planet-big.png');
@@ -279,6 +283,22 @@ export class GameScene extends Scene {
         this.runLowestY = this.groundReferenceY;
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
+        this.announcedAlerts.clear();
+
+        // Listen for collision with Cosmic Hazard sensor bodies
+        this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
+            for (const pair of event.pairs) {
+                const bodyA = pair.bodyA;
+                const bodyB = pair.bodyB;
+                if (!this.player || !this.player.body) continue;
+
+                if ((bodyA === this.player.body && bodyB.label === 'CosmicHazard') ||
+                    (bodyB === this.player.body && bodyA.label === 'CosmicHazard')) {
+                    const hazardBody = bodyA === this.player.body ? bodyB : bodyA;
+                    this.handleHazardImpact(hazardBody);
+                }
+            }
+        });
 
         this.dispatchAltitudeUpdate();
 
@@ -307,7 +327,44 @@ export class GameScene extends Scene {
 
         // Update the pivot engine routines
         if (this.pivotEngine) {
-            this.pivotEngine.updateEngineRoutines();
+            this.pivotEngine.updateEngineRoutines(delta);
+        }
+
+        // Update active cosmic hazards
+        if (this.levelGenerator) {
+            const hazards = this.levelGenerator.getHazards();
+            for (const hazard of hazards) {
+                hazard.update(time);
+            }
+        }
+
+        // Fast proximity check for hazards (prevents high-speed tunneling)
+        if (this.levelGenerator && this.player && this.player.body) {
+            const hazards = this.levelGenerator.getHazards();
+            const px = this.player.x;
+            const py = this.player.y;
+            for (const h of hazards) {
+                if (!h || !h.active || !h.body) continue;
+                const dist = Phaser.Math.Distance.Between(px, py, h.x, h.y);
+                if (dist < GAME_CONSTANTS.PLAYER.RADIUS + 22) {
+                    this.handleHazardImpact(h.body);
+                    break;
+                }
+            }
+        }
+
+        // Stratum Environmental Powers/Downs: Atmospheric Crosswinds & Gravity Surges
+        if (this.player && this.player.body && this.player.playerState !== "IDLE") {
+            if (this.currentAltitudeMeters >= 350 && this.currentAltitudeMeters < 1500) {
+                // Stratosphere (>= 350m): Solar crosswinds
+                const windForceX = Math.sin(time * 0.0012) * 0.0007;
+                this.matter.body.applyForce(this.player.body, this.player.body.position, { x: windForceX, y: 0 });
+            } else if (this.currentAltitudeMeters >= 1500) {
+                // Exosphere (>= 1500m): Gravitational surge & ion storm shear
+                const windForceX = Math.sin(time * 0.0016) * 0.001;
+                const gravitySurgeY = 0.0005;
+                this.matter.body.applyForce(this.player.body, this.player.body.position, { x: windForceX, y: gravitySurgeY });
+            }
         }
 
         const activeAnchor = this.pivotEngine?.getActiveAnchorPoint();
@@ -351,6 +408,9 @@ export class GameScene extends Scene {
             } else if (altitudeChanged) {
                 this.dispatchAltitudeUpdate();
             }
+
+            // Check stratum hazard alerts
+            this.checkStratumHazardAlerts(altitudeMeters);
 
             // Track the highest point reached this specific run (Y decreases as you climb)
             if (this.player.y < this.runLowestY) {
@@ -408,14 +468,32 @@ export class GameScene extends Scene {
     private drawQuantumTether(startX: number, startY: number, targetX: number, targetY: number): void {
         this.tetherGraphics.clear();
 
-        this.tetherGraphics.lineStyle(8, 0xFF007F, 0.4);
-        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+        const isUnstable = this.pivotEngine?.isAttachedToUnstable() ?? false;
+        const progress = this.pivotEngine?.getUnstableProgress() ?? 1;
 
-        this.tetherGraphics.lineStyle(4, 0x00FFCC, 0.8);
-        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+        if (isUnstable) {
+            const isStrobe = progress < 0.35 && (Math.floor(Date.now() / 80) % 2 === 0);
+            const outerColor = isStrobe ? 0xffffff : 0xff0055;
+            const innerColor = isStrobe ? 0xff0022 : 0xff7700;
 
-        this.tetherGraphics.lineStyle(1.5, 0xFFFFFF, 1.0);
-        this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+            this.tetherGraphics.lineStyle(9, outerColor, 0.5);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+            this.tetherGraphics.lineStyle(4, innerColor, 0.85);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+            this.tetherGraphics.lineStyle(1.8, 0xffffff, 1.0);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+        } else {
+            this.tetherGraphics.lineStyle(8, 0xFF007F, 0.4);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+            this.tetherGraphics.lineStyle(4, 0x00FFCC, 0.8);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+
+            this.tetherGraphics.lineStyle(1.5, 0xFFFFFF, 1.0);
+            this.tetherGraphics.lineBetween(startX, startY, targetX, targetY);
+        }
     }
 
     private settlePlayerIfOnSurface(): void {
@@ -448,16 +526,23 @@ export class GameScene extends Scene {
             // Player's horizontal center must be firmly on the platform surface (not hovering off the edges)
             const withinHorizontalBounds = playerX >= platformLeft && playerX <= platformRight;
 
-            const velocity = this.player.body.velocity;
-            const speed = Math.hypot(velocity.x, velocity.y);
+            if (withinSurfaceBand && withinHorizontalBounds) {
+                // If this is a crumbling platform, trigger the collapse countdown on surface contact!
+                if (platform.surfaceProps?.isCrumbling && !platform.isCrumblingTriggered) {
+                    platform.triggerCrumble();
+                }
 
-            // Settle only gentle descents onto the platform surface (prevents halting fast airborne flights)
-            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < 5) {
-                this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
-                this.matter.body.setAngularVelocity(this.player.body, 0);
+                const velocity = this.player.body.velocity;
+                const speed = Math.hypot(velocity.x, velocity.y);
 
-                this.player.updateState("IDLE");
-                return;
+                // Settle only gentle descents onto the platform surface (prevents halting fast airborne flights)
+                if (velocity.y >= 0 && speed < 5) {
+                    this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
+                    this.matter.body.setAngularVelocity(this.player.body, 0);
+
+                    this.player.updateState("IDLE");
+                    return;
+                }
             }
         }
     }
@@ -566,6 +651,11 @@ export class GameScene extends Scene {
             this.pivotEngine.destroy();
         }
 
+        if (this.levelGenerator) {
+            this.levelGenerator.destroyAll();
+        }
+        this.announcedAlerts.clear();
+
         // 3. Freeze the world so the scene renders a still frame behind the React overlay
         this.matter.world.pause();
 
@@ -577,6 +667,116 @@ export class GameScene extends Scene {
                     altitude: peakMeters,
                     best: this.maxAltitudeMeters
                 }
+            }));
+        }
+    }
+
+    private handleHazardImpact(hazardBody: MatterJS.BodyType): void {
+        const now = Date.now();
+        if (now - this.lastHazardImpactTime < 700) return;
+        this.lastHazardImpactTime = now;
+
+        // Force release grapple tether if hooked
+        if (this.pivotEngine) {
+            this.pivotEngine.forceRelease();
+        }
+
+        // Radial deflection impulse away from hazard center
+        const dx = this.player.x - hazardBody.position.x;
+        const dy = this.player.y - hazardBody.position.y;
+        const angle = Math.atan2(dy, dx);
+        const deflectSpeed = 10;
+
+        this.matter.body.setVelocity(this.player.body, {
+            x: Math.cos(angle) * deflectSpeed,
+            y: Math.min(-3, Math.sin(angle) * deflectSpeed)
+        });
+
+        // Screen shake and impact flash
+        this.cameras.main.shake(180, 0.012);
+
+        this.player.setTint(0xff0055);
+        this.time.delayedCall(240, () => {
+            if (this.player && this.player.active) {
+                this.player.clearTint();
+            }
+        });
+
+        const blastRing = this.add.circle(this.player.x, this.player.y, 20, 0xff0077, 0.9).setDepth(85);
+        this.tweens.add({
+            targets: blastRing,
+            scale: 3,
+            alpha: 0,
+            duration: 280,
+            ease: 'Power2',
+            onComplete: () => blastRing.destroy()
+        });
+
+        this.dispatchHazardAlert(
+            '⚠️ HAZARD DEFLECTION',
+            'COLLISION DETECTED // TETHER DISRUPTED',
+            'danger',
+            2500
+        );
+    }
+
+    private checkStratumHazardAlerts(alt: number): void {
+        if (alt >= 120 && !this.announcedAlerts.has('UNSTABLE_ANCHORS')) {
+            this.announcedAlerts.add('UNSTABLE_ANCHORS');
+            this.dispatchHazardAlert(
+                '⚠️ QUANTUM DECAY DETECTED',
+                'UNSTABLE ANCHORS ACTIVE // HOOK TIMER 2.2s',
+                'warning',
+                4000
+            );
+        }
+        if (alt >= 200 && !this.announcedAlerts.has('COSMIC_HAZARDS')) {
+            this.announcedAlerts.add('COSMIC_HAZARDS');
+            this.dispatchHazardAlert(
+                '⚠️ COSMIC ASTEROID BELT',
+                'DEFLECTION DEBRIS IN FLIGHT PATH',
+                'warning',
+                4000
+            );
+        }
+        if (alt >= 220 && !this.announcedAlerts.has('CRUMBLING_PLATFORMS')) {
+            this.announcedAlerts.add('CRUMBLING_PLATFORMS');
+            this.dispatchHazardAlert(
+                '⚠️ CRUST INSTABILITY',
+                'CRUMBLING PLATFORMS COLLAPSE UPON LANDING',
+                'warning',
+                4000
+            );
+        }
+        if (alt >= 350 && !this.announcedAlerts.has('SOLAR_CROSSWINDS')) {
+            this.announcedAlerts.add('SOLAR_CROSSWINDS');
+            this.dispatchHazardAlert(
+                '⚠️ STRATOSPHERE REACHED',
+                'SOLAR CROSSWINDS ENGAGED // LATERAL DRIFT ACTIVE',
+                'warning',
+                4500
+            );
+        }
+        if (alt >= 1500 && !this.announcedAlerts.has('GRAVITY_SURGE')) {
+            this.announcedAlerts.add('GRAVITY_SURGE');
+            this.dispatchHazardAlert(
+                '⚠️ EXOSPHERE ENTRY',
+                'GRAVITATIONAL SURGE & IONIC SHEAR DETECTED',
+                'danger',
+                5000
+            );
+        }
+    }
+
+    public dispatchHazardAlert(
+        title: string,
+        message: string,
+        severity: 'warning' | 'danger' = 'warning',
+        durationMs: number = 3500
+    ): void {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('tetherverse:hazard-alert', {
+                detail: { title, message, severity, durationMs }
             }));
         }
     }
