@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import NextImage from "next/image";
 import GameCanvas from "@/src/components/GameCanvas";
 import GameHUD from "@/src/components/hud/GameHUD";
 import MainMenu from "@/src/components/menu/MainMenu";
@@ -278,11 +279,16 @@ export default function Home() {
           <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
 
           {/* Central Logo Node */}
-          <div className="relative w-24 h-24 mb-6 rounded-full border border-cyan-500/30 bg-slate-900/80 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.2)]">
-            <div className="absolute inset-1.5 border border-dashed border-violet-500/30 rounded-full animate-[spin_30s_linear_infinite]" />
-            <span className="text-4xl font-black text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400">
-              Ω
-            </span>
+          <div className="relative w-28 h-28 mb-5 rounded-full border border-cyan-400/50 bg-slate-950/80 p-1.5 flex items-center justify-center shadow-[0_0_40px_rgba(6,182,212,0.35)]">
+            <div className="absolute inset-[-6px] border border-dashed border-violet-400/40 rounded-full animate-[spin_30s_linear_infinite]" />
+            <NextImage
+              src="/logo.png"
+              alt="Tetherverse Logo"
+              width={104}
+              height={104}
+              priority
+              className="w-full h-full object-contain rounded-full"
+            />
           </div>
 
           <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight uppercase mb-1">
@@ -328,7 +334,7 @@ export default function Home() {
   }
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden bg-radial-dark text-white select-none">
+    <main className="relative w-screen min-h-[100dvh] h-[100dvh] overflow-hidden bg-[#02040a] text-white select-none">
       {/* Intro Video Layer */}
       {currentView === 'intro' && (
         <IntroVideo
@@ -389,9 +395,15 @@ export default function Home() {
                 <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-transparent via-red-500/80 to-transparent shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
 
                 {/* Multiverse Emblem */}
-                <div className="relative w-20 h-20 mx-auto rounded-full border border-red-500/30 bg-slate-950/80 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.15)]">
-                  <div className="absolute inset-1.5 border border-dashed border-red-500/30 rounded-full animate-[spin_20s_linear_infinite]" />
-                  <span className="text-3xl font-black text-red-300">Ω</span>
+                <div className="relative w-20 h-20 mx-auto rounded-full border border-red-500/40 bg-slate-950/80 p-1 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.25)]">
+                  <div className="absolute inset-[-4px] border border-dashed border-red-500/30 rounded-full animate-[spin_20s_linear_infinite]" />
+                  <NextImage
+                    src="/logo.png"
+                    alt=""
+                    width={72}
+                    height={72}
+                    className="w-full h-full object-contain rounded-full filter hue-rotate-180 brightness-95"
+                  />
                 </div>
 
                 <p className="mt-5 font-mono text-[10px] tracking-[0.4em] text-red-400 uppercase">

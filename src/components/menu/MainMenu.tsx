@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import ProfileCard from "./ProfileCard";
 import MultiverseBackground from "./MultiverseBackground";
@@ -34,113 +35,163 @@ export default function MainMenu({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onPlay]);
 
+    const getStratum = (alt: number) => {
+        if (alt >= 1500) return "EXOSPHERE";
+        if (alt >= 700) return "MESOSPHERE";
+        if (alt >= 350) return "STRATOSPHERE";
+        if (alt >= 120) return "TROPOSPHERE";
+        return "SURFACE";
+    };
+
     return (
-        <div className="relative w-screen h-screen overflow-hidden flex flex-col justify-between p-6 md:p-8 z-10 select-none bg-radial-dark">
+        <div className="relative w-screen min-h-[100dvh] h-[100dvh] overflow-hidden flex flex-col justify-between p-4 sm:p-6 md:p-8 z-10 select-none bg-[#02040a]">
+            {/* Layered Cosmic Multiverse Background */}
             <MultiverseBackground />
 
-            {/* TOP BAR INFRASTRUCTURE */}
-            <header className="w-full flex justify-between items-center z-20">
+            {/* TOP BAR: Profile & Sector Status */}
+            <header className="w-full flex justify-between items-center z-20 gap-3 pt-1">
                 <ProfileCard user={user} bestAltitude={bestAltitude} onLogout={onLogout} />
-                <div className="hidden sm:flex items-center gap-3 font-mono text-[11px] bg-slate-950/60 border border-slate-800/80 px-4 py-2 rounded-xl backdrop-blur-md">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                    <span className="text-slate-400">SECTOR // <span className="text-cyan-300 font-bold">07-GRAVITY</span></span>
+
+                <div className="flex items-center gap-2 font-mono text-[10px] md:text-xs bg-slate-950/70 border border-cyan-500/30 px-3 md:px-4 py-2 rounded-xl backdrop-blur-md shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                    <span className="text-slate-300 font-bold hidden sm:inline">SECTOR //</span>
+                    <span className="text-cyan-300 font-black">07-GRAVITY</span>
                 </div>
             </header>
 
-            {/* HERO BRANDING CENTRIC SECTION */}
-            <main className="w-full flex flex-col items-center justify-center my-auto z-20 text-center px-4">
-                {/* Multiverse Ω Logo Node */}
+            {/* HERO CENTERPIECE: Multiverse Emblem, Title, & Mobile Expedition Pill */}
+            <main className="w-full flex flex-col items-center justify-center my-auto z-20 text-center px-2 py-2">
+                {/* Official High-Resolution Multiverse Grappling Vortex Emblem */}
                 <motion.div
-                    initial={{ scale: 0.85, opacity: 0 }}
+                    initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative mb-5 group"
+                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                    className="relative mb-3 md:mb-5 group cursor-pointer"
+                    onClick={onPlay}
                 >
-                    {/* Glowing Aura */}
-                    <div className="absolute inset-0 rounded-full bg-linear-to-tr from-violet-600 via-cyan-500 to-fuchsia-500 blur-3xl opacity-25 group-hover:opacity-40 transition-opacity duration-700 scale-110 animate-pulse" />
+                    {/* Pulsing Cosmic Energy Halo */}
+                    <div className="absolute inset-[-15%] rounded-full bg-linear-to-tr from-cyan-500 via-violet-600 to-fuchsia-500 blur-2xl md:blur-3xl opacity-35 group-hover:opacity-60 transition-opacity duration-700 animate-pulse" />
 
-                    {/* Emblem Node */}
-                    <div className="relative w-36 h-36 md:w-44 md:h-44 rounded-full border border-cyan-500/30 bg-slate-950/80 backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.2)] flex items-center justify-center overflow-hidden">
-                        <div className="absolute inset-2 border border-dashed border-violet-500/30 rounded-full animate-[spin_40s_linear_infinite]" />
-                        <div className="absolute inset-5 border border-cyan-500/20 rounded-full animate-[spin_25s_linear_infinite_reverse]" />
-                        <span className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-linear-to-b from-white via-cyan-100 to-slate-400 tracking-tighter z-10 select-none">
-                            Ω
-                        </span>
-                    </div>
+                    {/* Rotating Concentric Cyber Rings */}
+                    <div className="absolute inset-[-12px] md:inset-[-16px] border border-cyan-400/30 rounded-full animate-[spin_35s_linear_infinite]" />
+                    <div className="absolute inset-[-6px] md:inset-[-8px] border border-dashed border-violet-400/40 rounded-full animate-[spin_20s_linear_infinite_reverse]" />
+
+                    {/* Emblem Wrapper */}
+                    <motion.div
+                        className="relative w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52 rounded-full overflow-hidden p-1.5 bg-slate-950/80 border border-cyan-400/50 shadow-[0_0_40px_rgba(6,182,212,0.3)] backdrop-blur-md"
+                        animate={{
+                            y: [0, -6, 0],
+                        }}
+                        transition={{
+                            duration: 4,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                        }}
+                    >
+                        <Image
+                            src="/logo.png"
+                            alt="Tetherverse Logo"
+                            width={220}
+                            height={220}
+                            priority
+                            className="w-full h-full object-contain rounded-full transform group-hover:scale-105 transition-transform duration-500"
+                        />
+                    </motion.div>
                 </motion.div>
 
-                {/* Title */}
+                {/* Game Title */}
                 <motion.h1
-                    initial={{ y: 20, opacity: 0 }}
+                    initial={{ y: 15, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.15, duration: 0.8 }}
-                    className="text-5xl md:text-7xl lg:text-8xl font-black text-white tracking-tight uppercase font-sans mb-2 select-none"
+                    transition={{ delay: 0.15, duration: 0.6 }}
+                    className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white tracking-tight uppercase font-sans mb-1 select-none drop-shadow-[0_0_20px_rgba(6,182,212,0.4)]"
                 >
-                    Tether<span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 via-violet-400 to-fuchsia-500">verse</span>
+                    Tether<span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 via-violet-400 to-fuchsia-400">verse</span>
                 </motion.h1>
 
                 {/* Subtitle */}
                 <motion.p
-                    initial={{ y: 15, opacity: 0 }}
+                    initial={{ y: 12, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.25, duration: 0.8 }}
-                    className="font-mono text-xs md:text-sm text-cyan-400/80 tracking-[0.35em] uppercase mb-8 select-none"
+                    transition={{ delay: 0.25, duration: 0.6 }}
+                    className="font-mono text-[10px] sm:text-xs md:text-sm text-cyan-300/80 tracking-[0.25em] md:tracking-[0.35em] uppercase mb-4 md:mb-6 select-none"
                 >
-                    {"// Quantum Singularity Ascent Simulator"}
+                    {"// QUANTUM ASCENT LOOP • MULTIVERSE EXPEDITION"}
                 </motion.p>
 
-                {/* Main Action Buttons */}
+                {/* Mobile Expedition Credentials Badge */}
                 <motion.div
-                    initial={{ y: 25, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.35, duration: 0.8 }}
-                    className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-8 w-full sm:w-auto"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.35, duration: 0.6 }}
+                    className="flex items-center gap-3 sm:gap-6 bg-slate-950/70 border border-violet-500/30 backdrop-blur-xl px-4 py-2 rounded-2xl shadow-[0_0_25px_rgba(139,92,246,0.15)] mb-6 md:mb-8 text-left"
                 >
-                    <AnimatedButton onClick={onPlay} variant="primary">
-                        INITIALIZE ASCENT [↵]
+                    <div className="flex flex-col">
+                        <span className="font-mono text-[9px] text-slate-400 uppercase tracking-widest">
+                            SECTOR RECORD
+                        </span>
+                        <span className="font-mono font-black text-base sm:text-lg text-cyan-300">
+                            {bestAltitude.toLocaleString()}
+                            <span className="text-cyan-400 text-xs font-normal ml-0.5">m</span>
+                        </span>
+                    </div>
+
+                    <div className="w-px h-8 bg-slate-800" />
+
+                    <div className="flex flex-col">
+                        <span className="font-mono text-[9px] text-slate-400 uppercase tracking-widest">
+                            STRATUM
+                        </span>
+                        <span className="font-mono font-bold text-xs sm:text-sm text-violet-300">
+                            {getStratum(bestAltitude)}
+                        </span>
+                    </div>
+                </motion.div>
+
+                {/* MOBILE THUMB ACTION ZONE: Primary Launch & Telemetry Buttons */}
+                <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.45, duration: 0.6 }}
+                    className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full max-w-xs sm:max-w-md"
+                >
+                    <AnimatedButton onClick={onPlay} variant="primary" className="w-full">
+                        <span>▶ INITIALIZE ASCENT</span>
+                        <span className="text-[10px] bg-black/30 border border-white/20 px-1.5 py-0.5 rounded font-mono font-normal text-cyan-200 hidden sm:inline">
+                            ↵
+                        </span>
                     </AnimatedButton>
-                    <AnimatedButton onClick={onOpenLeaderboard} variant="secondary">
-                        TELEMETRY MATRIX
+                    <AnimatedButton onClick={onOpenLeaderboard} variant="secondary" className="w-full">
+                        <span>🏆 TELEMETRY MATRIX</span>
                     </AnimatedButton>
                 </motion.div>
 
-                {/* Compact Control Hints */}
+                {/* Mobile Touch / Keyboard Control Guide */}
                 <motion.div
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45, duration: 0.8 }}
-                    className="hidden md:flex items-center gap-4 font-mono text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800/80 backdrop-blur-sm px-5 py-2.5 rounded-2xl shadow-lg"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.55, duration: 0.6 }}
+                    className="mt-4 md:mt-6 flex items-center gap-2 font-mono text-[10px] md:text-[11px] text-slate-400 bg-slate-950/60 border border-slate-800/80 backdrop-blur-md px-4 py-2 rounded-full shadow-lg"
                 >
-                    <div className="flex items-center gap-1.5">
-                        <span className="bg-slate-900 border border-slate-700 text-cyan-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                            HOLD CLICK / SPACE
-                        </span>
-                        <span>Grapple</span>
-                    </div>
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                    <span className="text-slate-200 font-bold">TAP & HOLD</span>
+                    <span>GRAPPLE</span>
                     <span className="text-slate-600">•</span>
-                    <div className="flex items-center gap-1.5">
-                        <span className="bg-slate-900 border border-slate-700 text-violet-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                            RELEASE
-                        </span>
-                        <span>Angular Launch</span>
-                    </div>
-                    <span className="text-slate-600">•</span>
-                    <div className="flex items-center gap-1.5">
-                        <span className="bg-slate-900 border border-slate-700 text-fuchsia-300 font-bold px-1.5 py-0.5 rounded text-[10px]">
-                            A / D
-                        </span>
-                        <span>Optical Flow</span>
-                    </div>
+                    <span className="text-slate-200 font-bold">RELEASE</span>
+                    <span>LAUNCH</span>
+                    <span className="text-slate-600 hidden md:inline">•</span>
+                    <span className="text-slate-200 font-bold hidden md:inline">[A/D]</span>
+                    <span className="hidden md:inline">STEER</span>
                 </motion.div>
             </main>
 
             {/* FOOTER METADATA ENGINE */}
-            <footer className="w-full flex justify-between items-center z-20 font-mono text-[10px] md:text-xs text-slate-500 tracking-wider">
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>SYSTEM CORE // ONLINE</span>
+            <footer className="w-full flex justify-between items-center z-20 font-mono text-[9px] md:text-[11px] text-slate-500 tracking-wider pb-1">
+                <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span>STATION // LINKED</span>
                 </div>
-                <span>v2.4.0-QUANTUM</span>
+                <span>v2.4.0-MULTIVERSE</span>
             </footer>
         </div>
     );
