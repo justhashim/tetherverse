@@ -330,8 +330,8 @@ export class GameScene extends Scene {
                 ? this.levelGenerator.getRouteDirectionNear(this.player.x, this.player.y)
                 : 1;
 
-            // Optical flow: continuous 2.5D mirroring turn, squash/stretch, and aerodynamic banking
-            this.player.updateOpticalFlow(delta, routeDir, activeAnchor, isHooked);
+            // Update facing direction cleanly via GPU texture mirroring without modifying physics scale
+            this.player.updateSpriteDirection(this.player.body.velocity.x, activeAnchor, isHooked, routeDir);
 
             // Altimeter calculation routines
             const pixelHeight = (this.groundReferenceY - this.player.y) - 20;
@@ -419,7 +419,13 @@ export class GameScene extends Scene {
     }
 
     private settlePlayerIfOnSurface(): void {
-        if (!this.player || this.player.playerState === "AIMING" || this.player.playerState === "LAUNCHED") {
+        // Must NEVER settle if player is aiming, launched, OR currently tethered to an anchor!
+        if (
+            !this.player ||
+            this.player.playerState === "AIMING" ||
+            this.player.playerState === "LAUNCHED" ||
+            (this.pivotEngine && this.pivotEngine.isCurrentlyHooked())
+        ) {
             return;
         }
 
@@ -433,20 +439,20 @@ export class GameScene extends Scene {
             }
 
             const platformTop = platform.body.position.y - (platform.displayHeight / 2);
-            const platformLeft = platform.body.position.x - (platform.displayWidth / 2) - playerRadius;
-            const platformRight = platform.body.position.x + (platform.displayWidth / 2) + playerRadius;
-            const withinSurfaceBand = playerBottom >= platformTop - 2 && playerBottom <= platformTop + 8;
+            const halfW = platform.displayWidth / 2;
+            const platformLeft = platform.body.position.x - halfW;
+            const platformRight = platform.body.position.x + halfW;
+
+            // Must be vertically contacting the top surface of the platform
+            const withinSurfaceBand = playerBottom >= platformTop - 1 && playerBottom <= platformTop + 5;
+            // Player's horizontal center must be firmly on the platform surface (not hovering off the edges)
             const withinHorizontalBounds = playerX >= platformLeft && playerX <= platformRight;
 
             const velocity = this.player.body.velocity;
             const speed = Math.hypot(velocity.x, velocity.y);
 
-            // Landing assist: settle whenever descending onto the platform top at a
-            // landable speed (LAUNCHED is excluded above, so this never interrupts a
-            // real swing). Sticks the landing instead of sliding off the small ledge.
-            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < GAME_CONSTANTS.LANDING.SPEED_THRESHOLD) {
-
-                // Fully stop the body so the landing holds.
+            // Settle only gentle descents onto the platform surface (prevents halting fast airborne flights)
+            if (withinSurfaceBand && withinHorizontalBounds && velocity.y >= 0 && speed < 5) {
                 this.matter.body.setVelocity(this.player.body, { x: 0, y: 0 });
                 this.matter.body.setAngularVelocity(this.player.body, 0);
 
