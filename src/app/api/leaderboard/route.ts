@@ -1,24 +1,25 @@
-import { connectToDatabase } from "@/src/lib/db";
 import { NextResponse } from "next/server";
+import { fetchLeaderboard } from "@/src/lib/players";
 
-// CRITICAL: Next.js aggressively caches GET requests. 
-// This line forces the server to fetch fresh scores every single time!
+// Next.js caches aggressively. This must stay fresh, because the leaderboard is
+// the page players land on to compare personal bests.
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        const db = await connectToDatabase();
-        const collection = db.collection('user');
+        const leaderboard = await fetchLeaderboard(10);
 
-        // Fetch the top 10 users who actually have a score above 0
-        const topPlayers = await collection
-            .find({ maxAltitude: { $gt: 0 } })
-            .project({ name: 1, image: 1, maxAltitude: 1 }) // Only pull the data we need to save bandwidth
-            .sort({ maxAltitude: -1 }) // Sort descending (highest score first)
-            .limit(10) // Only grab the top 10
-            .toArray();
-
-        return NextResponse.json({ success: true, leaderboard: topPlayers });
+        return NextResponse.json({
+            success: true,
+            // Field names are kept as the game has always exposed them so the
+            // leaderboard UI and the launcher card need no changes.
+            leaderboard: leaderboard.map((entry) => ({
+                _id: entry.name,
+                name: entry.name,
+                image: entry.image,
+                maxAltitude: entry.maxAltitude,
+            })),
+        });
 
     } catch (error) {
         console.error("Leaderboard fetch error:", error);

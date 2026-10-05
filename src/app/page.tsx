@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import NextImage from "next/image";
 import GameCanvas from "@/src/components/GameCanvas";
 import GameHUD from "@/src/components/hud/GameHUD";
 import MainMenu from "@/src/components/menu/MainMenu";
 import LeaderboardPanel from "@/src/components/leaderboard/LeaderboardPanel";
 import MultiverseBackground from "@/src/components/menu/MultiverseBackground";
-import { authClient } from "@/src/lib/auth-client";
+import { useExcelSession } from "@/src/lib/excel-auth-client";
+import { useBridgeAuth } from "@/src/lib/bridge-auth";
 
 type AppState = 'intro' | 'menu' | 'playing' | 'leaderboard';
 
@@ -141,7 +142,29 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
 
 // --- Main Application Root ---
 export default function Home() {
-  const { data: session, isPending } = authClient.useSession();
+  const excelSession = useExcelSession();
+  const bridge = useBridgeAuth();
+
+  // Embedded play authenticates through the launcher; standalone play through the
+  // Excel Play accounts. Either one is enough to reach the menu. Both are reshaped
+  // into the field names the menu already expects so downstream props stay unchanged.
+  const identity = useMemo(() => {
+    if (excelSession.user) {
+      return {
+        id: excelSession.user.id,
+        name: excelSession.user.name,
+        email: excelSession.user.email,
+        image: excelSession.user.picture,
+      };
+    }
+    if (!bridge.user) return null;
+    return {
+      id: bridge.user.id,
+      name: bridge.user.name,
+      email: bridge.user.email,
+      image: bridge.user.picture,
+    };
+  }, [excelSession.user, bridge.user]);
   const [currentView, setCurrentView] = useState<AppState>('intro');
   const [gameOver, setGameOver] = useState<GameOverData | null>(null);
   const [gameKey, setGameKey] = useState(0);
@@ -154,13 +177,9 @@ export default function Home() {
     return 0;
   });
 
-  const handleLogin = async () => {
-    await authClient.signIn.social({ provider: "google", callbackURL: "/" });
-  };
+  const handleLogin = excelSession.login;
 
-  const handleLogout = async () => {
-    await authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } });
-  };
+  const handleLogout = excelSession.logout;
 
   const handleRerun = () => {
     setGameOver(null);
@@ -246,18 +265,59 @@ export default function Home() {
     }
   }, []);
 
-  // Pre-mount GameCanvas in the background once session is ready
+  // Pre-mount GameCanvas in the background once an identity is ready
   useEffect(() => {
-    if (session) {
+    if (identity) {
       const timer = setTimeout(() => {
         setIsMenuMounted(true);
       }, 1200);
       return () => clearTimeout(timer);
     }
-  }, [session]);
+  }, [identity]);
+
+  // View: Connecting to the Excel Play launcher
+  if (bridge.status === 'awaiting') {
+    return (
+      <main className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center gap-3 select-none">
+        <div className="relative w-10 h-10">
+          <div className="absolute inset-0 border-2 border-t-cyan-400 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin" />
+          <div className="absolute inset-1.5 border-2 border-b-violet-500 border-r-transparent border-t-transparent border-l-transparent rounded-full animate-[spin_1s_linear_infinite_reverse]" />
+        </div>
+        <span className="text-slate-400 font-mono text-xs tracking-[0.3em] uppercase animate-pulse">
+          Linking Excel Play session...
+        </span>
+      </main>
+    );
+  }
+
+  // View: Embedded, but the launcher token could not be verified. Falling through
+  // to the sign-in gate here would be wrong: the game is framed, so there is no
+  // usable sign-in inside the iframe. Say what happened and offer a retry instead.
+  if (bridge.status === 'error') {
+    return (
+      <main className="relative w-screen h-screen overflow-hidden bg-radial-dark flex flex-col items-center justify-center p-6 select-none">
+        <MultiverseBackground />
+        <div className="relative z-10 w-full max-w-md bg-slate-950/70 border border-rose-500/30 rounded-3xl p-8 text-center backdrop-blur-xl">
+          <h1 className="text-xl font-black text-white tracking-tight uppercase mb-2">
+            Session link failed
+          </h1>
+          <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+            Excel Play did not hand over a valid access token, so this climb
+            cannot be scored to your account.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer active:scale-[0.98]"
+          >
+            Retry link
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   // View: Loading Session
-  if (isPending) {
+  if (excelSession.status === 'loading' && bridge.status === 'standalone') {
     return (
       <main className="w-screen h-screen bg-slate-950 flex flex-col items-center justify-center gap-3 select-none">
         <div className="relative w-10 h-10">
@@ -272,7 +332,7 @@ export default function Home() {
   }
 
   // View: Unauthenticated Dimensional Terminal Gate
-  if (!session) {
+  if (!identity) {
     return (
       <main className="relative w-screen h-screen overflow-hidden bg-radial-dark flex flex-col items-center justify-center p-6 select-none">
         <MultiverseBackground />
@@ -303,28 +363,14 @@ export default function Home() {
 
           <button
             onClick={handleLogin}
-            className="group relative w-full flex items-center justify-center gap-3 bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 font-mono font-bold text-sm tracking-wider uppercase px-6 py-3.5 rounded-xl border border-zinc-200 transition-colors duration-150 shadow-sm active:scale-[0.98] cursor-pointer select-none"
+            className="group relative w-full flex items-center justify-center gap-3 bg-cyan-400 hover:bg-cyan-300 active:bg-cyan-500 text-slate-950 font-mono font-bold text-sm tracking-wider uppercase px-6 py-3.5 rounded-xl border border-cyan-300/60 transition-colors duration-150 shadow-[0_0_30px_rgba(34,211,238,0.25)] active:scale-[0.98] cursor-pointer select-none"
           >
-            {/* Google "G" SVG */}
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-              />
+            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+              <polyline points="10 17 15 12 10 7" />
+              <line x1="3" y1="12" x2="15" y2="12" />
             </svg>
-            <span>Authorize Node with Google</span>
+            <span>Sign in with Excel Play</span>
           </button>
 
           <div className="mt-8 font-mono text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -360,7 +406,7 @@ export default function Home() {
             onPlay={() => setCurrentView('playing')}
             onOpenLeaderboard={() => setCurrentView('leaderboard')}
             onLogout={handleLogout}
-            user={session.user}
+            user={identity}
             bestAltitude={bestAltitude}
           />
         </div>
@@ -370,7 +416,7 @@ export default function Home() {
       {currentView === 'leaderboard' && (
         <LeaderboardPanel
           onClose={() => setCurrentView('menu')}
-          currentUserId={session.user.id}
+          currentUserId={identity.id}
         />
       )}
 

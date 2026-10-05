@@ -716,10 +716,19 @@ export class GameScene extends Scene {
     // Saving high scores to the database (called on game over)
     private async saveHighScore(finalAltitude: number) {
         try {
+            // When embedded in the Excel Play launcher the token arrives by postMessage
+            // rather than from a sign-in redirect, and there is no session cookie,
+            // so it travels as a bearer. The scene is not a React component, so the
+            // token is read from the global that the auth hooks maintain.
+            const bridgeToken = typeof window !== 'undefined'
+                ? window.__summitJackAuthToken
+                : null;
+
             const response = await fetch('/api/score', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...(bridgeToken ? { Authorization: `Bearer ${bridgeToken}` } : {}),
                 },
                 body: JSON.stringify({ score: Math.floor(finalAltitude) })
             });

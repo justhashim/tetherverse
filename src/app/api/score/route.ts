@@ -1,50 +1,34 @@
-import { auth } from "@/src/lib/auth";
 import { headers } from "next/headers";
-import { connectToDatabase } from "@/src/lib/db";
-import { ObjectId, Filter } from "mongodb";
+import {
+    readBearerToken,
+    verifyExcelAccessToken,
+} from "@/src/lib/excel-auth";
+import { getPlayerRecordByEmail, recordRun } from "@/src/lib/players";
 
-interface UserDocument {
-    _id?: ObjectId | string;
-    id?: string;
-    name?: string;
-    email?: string;
-    image?: string | null;
-    maxAltitude?: number;
-}
+/**
+ * Resolves who is making this request.
+ *
+ * The only identity is an Excel Play access token, verified against the accounts
+ * backend. It is sent as a bearer by both entry points: standalone play (from the
+ * Excel session hook) and embedded play (bridged from the launcher).
+ *
+ * Returns null when there is no token, or when the accounts backend does not
+ * confirm it. A rejected token must never fall through to an anonymous write.
+ */
+async function verifyRequestIdentity() {
+    const requestHeaders = await headers();
 
-interface SessionUserWithStats {
-    id: string;
-    name: string;
-    email: string;
-    image?: string | null;
-    maxAltitude?: number;
-}
+    const token = readBearerToken(requestHeaders.get("authorization"));
+    if (!token) return null;
 
-function buildUserQuery(userId: string): Filter<UserDocument> {
-    if (ObjectId.isValid(userId) && String(new ObjectId(userId)) === userId) {
-        return {
-            $or: [
-                { _id: new ObjectId(userId) },
-                { _id: userId },
-                { id: userId }
-            ]
-        };
-    }
-    return {
-        $or: [
-            { _id: userId },
-            { id: userId }
-        ]
-    };
+    return verifyExcelAccessToken(token);
 }
 
 export async function POST(request: Request) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const profile = await verifyRequestIdentity();
 
-        if (!session) {
+        if (!profile) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -54,22 +38,27 @@ export async function POST(request: Request) {
             return Response.json({ error: "Invalid score value" }, { status: 400 });
         }
 
-        const db = await connectToDatabase();
-        const collection = db.collection<UserDocument>('user');
-        const query = buildUserQuery(session.user.id);
+        // One atomic statement: creates the player and their leaderboard row if
+        // this is their first run, then raises the personal best.
+        const result = await recordRun(
+            {
+                excelUserId: profile.id,
+                email: profile.email,
+                name: profile.name,
+                image: profile.picture,
+            },
+            score,
+        );
 
-        const currentUser = await collection.findOne(query);
-        const currentRecord = currentUser?.maxAltitude || 0;
-
-        if (score > currentRecord) {
-            await collection.updateOne(
-                query,
-                { $set: { maxAltitude: score } }
-            );
-            return Response.json({ success: true, updated: true, newRecord: score });
+        if (result.isNewBest) {
+            console.log(`New personal best for ${result.email}: ${result.maxAltitude}m`);
         }
 
-        return Response.json({ success: true, updated: false, currentRecord });
+        return Response.json({
+            success: true,
+            updated: result.isNewBest,
+            maxAltitude: result.maxAltitude,
+        });
 
     } catch (error) {
         console.error("Score Save Error:", error);
@@ -79,30 +68,18 @@ export async function POST(request: Request) {
 
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const profile = await verifyRequestIdentity();
 
-        if (!session) {
+        if (!profile) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Fast path: Better-Auth already fetches user additionalFields (including maxAltitude)
-        // during session retrieval. Returning it directly avoids an extra database roundtrip.
-        const sessionUser = session.user as unknown as SessionUserWithStats;
-        if (typeof sessionUser.maxAltitude === "number") {
-            return Response.json({ success: true, maxAltitude: sessionUser.maxAltitude });
-        }
+        const record = await getPlayerRecordByEmail(profile.email);
 
-        // Fallback: Query the user collection using the shared native pool
-        const db = await connectToDatabase();
-        const collection = db.collection<UserDocument>('user');
-        const query = buildUserQuery(session.user.id);
-
-        const currentUser = await collection.findOne(query);
-        const maxAltitude = currentUser?.maxAltitude || 0;
-
-        return Response.json({ success: true, maxAltitude });
+        return Response.json({
+            success: true,
+            maxAltitude: record?.maxAltitude ?? 0,
+        });
 
     } catch (error) {
         console.error("Score Fetch Error:", error);
