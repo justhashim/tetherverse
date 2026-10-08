@@ -1,28 +1,28 @@
-import { NextResponse } from "next/server";
-import { fetchLeaderboard } from "@/src/lib/players";
+import {
+    ApiUnavailableError,
+    toResponse,
+    tetherverseApi,
+} from '@/src/lib/tetherverse-api';
 
 // Next.js caches aggressively. This must stay fresh, because the leaderboard is
 // the page players land on to compare personal bests.
 export const dynamic = 'force-dynamic';
 
+/**
+ * The public leaderboard, forwarded to the Tetherverse API.
+ *
+ * No token is needed: the API reads only `player_points`, which carries a display
+ * name and avatar but no email, so the leaderboard exposes no player identity and
+ * never touches the profile table.
+ */
 export async function GET() {
     try {
-        const leaderboard = await fetchLeaderboard(10);
-
-        return NextResponse.json({
-            success: true,
-            // Field names are kept as the game has always exposed them so the
-            // leaderboard UI and the launcher card need no changes.
-            leaderboard: leaderboard.map((entry) => ({
-                _id: entry.name,
-                name: entry.name,
-                image: entry.image,
-                maxAltitude: entry.maxAltitude,
-            })),
-        });
-
+        return toResponse(await tetherverseApi.getLeaderboard());
     } catch (error) {
-        console.error("Leaderboard fetch error:", error);
-        return NextResponse.json({ error: "Failed to fetch leaderboard" }, { status: 500 });
+        if (error instanceof ApiUnavailableError) {
+            return Response.json({ error: 'Failed to fetch leaderboard' }, { status: 502 });
+        }
+        console.error('Leaderboard fetch error:', error);
+        return Response.json({ error: 'Failed to fetch leaderboard' }, { status: 500 });
     }
 }

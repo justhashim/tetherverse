@@ -1,88 +1,65 @@
-import { headers } from "next/headers";
+import { headers } from 'next/headers';
+
 import {
-    readBearerToken,
-    verifyExcelAccessToken,
-} from "@/src/lib/excel-auth";
-import { getPlayerRecordByEmail, recordRun } from "@/src/lib/players";
+    ApiUnavailableError,
+    readBearerHeader,
+    toResponse,
+    tetherverseApi,
+} from '@/src/lib/tetherverse-api';
 
 /**
- * Resolves who is making this request.
+ * Score read and write, forwarded to the Tetherverse API.
  *
- * The only identity is an Excel Play access token, verified against the accounts
- * backend. It is sent as a bearer by both entry points: standalone play (from the
- * Excel session hook) and embedded play (bridged from the launcher).
- *
- * Returns null when there is no token, or when the accounts backend does not
- * confirm it. A rejected token must never fall through to an anonymous write.
+ * The Excel Play token is passed through untouched and verified by the API against
+ * the accounts backend, so this route has no identity logic and no database code of
+ * its own. A rejected token can never fall through to an anonymous write, because
+ * this route never decides what a token means.
  */
-async function verifyRequestIdentity() {
-    const requestHeaders = await headers();
-
-    const token = readBearerToken(requestHeaders.get("authorization"));
-    if (!token) return null;
-
-    return verifyExcelAccessToken(token);
-}
 
 export async function POST(request: Request) {
     try {
-        const profile = await verifyRequestIdentity();
+        const requestHeaders = await headers();
 
-        if (!profile) {
-            return Response.json({ error: "Unauthorized" }, { status: 401 });
+        const { score } = await request.json().catch(() => ({}) as { score?: unknown });
+
+        // Reject a malformed score here rather than forwarding it, so a bad payload
+        // costs one round trip less and the error names the actual problem.
+        if (typeof score !== 'number' || isNaN(score) || score < 0) {
+            return Response.json({ error: 'Invalid score value' }, { status: 400 });
         }
 
-        const { score } = await request.json();
-
-        if (typeof score !== "number" || isNaN(score) || score < 0) {
-            return Response.json({ error: "Invalid score value" }, { status: 400 });
-        }
-
-        // One atomic statement: creates the player and their leaderboard row if
-        // this is their first run, then raises the personal best.
-        const result = await recordRun(
-            {
-                excelUserId: profile.id,
-                email: profile.email,
-                name: profile.name,
-                image: profile.picture,
-            },
-            score,
+        return toResponse(
+            await tetherverseApi.postScore(
+                readBearerHeader(requestHeaders.get('authorization')),
+                score,
+            ),
         );
-
-        if (result.isNewBest) {
-            console.log(`New personal best for ${result.email}: ${result.maxAltitude}m`);
-        }
-
-        return Response.json({
-            success: true,
-            updated: result.isNewBest,
-            maxAltitude: result.maxAltitude,
-        });
-
     } catch (error) {
-        console.error("Score Save Error:", error);
-        return Response.json({ error: "Failed to process score" }, { status: 500 });
+        if (error instanceof ApiUnavailableError) {
+            return Response.json(
+                { error: 'Failed to process score' },
+                { status: 502 },
+            );
+        }
+        console.error('Score Save Error:', error);
+        return Response.json({ error: 'Failed to process score' }, { status: 500 });
     }
 }
 
 export async function GET() {
     try {
-        const profile = await verifyRequestIdentity();
+        const requestHeaders = await headers();
 
-        if (!profile) {
-            return Response.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        const record = await getPlayerRecordByEmail(profile.email);
-
-        return Response.json({
-            success: true,
-            maxAltitude: record?.maxAltitude ?? 0,
-        });
-
+        return toResponse(
+            await tetherverseApi.getScore(
+                readBearerHeader(requestHeaders.get('authorization')),
+            ),
+        );
     } catch (error) {
-        console.error("Score Fetch Error:", error);
-        return Response.json({ error: "Failed to fetch score" }, { status: 500 });
+        if (error instanceof ApiUnavailableError) {
+            return Response.json({ error: 'Failed to fetch score' }, { status: 502 });
+        }
+        console.error('Score Fetch Error:', error);
+        return Response.json({ error: 'Failed to fetch score' }, { status: 500 });
     }
 }
