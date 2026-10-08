@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# `env.prod` and `env.example` have no leading dot, so `.env*` does not match them.
+# Neither holds a secret: every value is a URL or a browser-visible origin. They are
+# committed on purpose so a production config is reviewable in a diff.
+env.local
+
 # vercel
 .vercel
 
