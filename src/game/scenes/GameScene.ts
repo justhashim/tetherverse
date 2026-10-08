@@ -82,24 +82,6 @@ export class GameScene extends Scene {
         this.loadDatabaseHighScore();
     }
 
-    /**
-     * Tells the React layer how many coins the player holds.
-     *
-     * Mirrors the altitude event rather than exposing a second channel, so the HUD
-     * has one place to read run state from.
-     */
-    public dispatchCoinUpdate() {
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('tetherverse:coin-update', {
-                detail: {
-                    coins: this.bankedCoins + this.pendingCoins,
-                    banked: this.bankedCoins,
-                    pending: this.pendingCoins,
-                }
-            }));
-        }
-    }
-
     public dispatchAltitudeUpdate() {
         if (typeof window !== 'undefined') {
             const zone = this.levelGenerator ? this.levelGenerator.getZoneName(this.currentAltitudeMeters) : 'SURFACE';
@@ -151,7 +133,6 @@ export class GameScene extends Scene {
             // scored can still hold coins from earlier runs, so a 0m best must not
             // hide them.
             this.bankedCoins = data.coins ?? 0;
-            this.dispatchCoinUpdate();
         } catch (error) {
             console.error("Failed to sync high score from cloud", error);
         }
@@ -349,7 +330,6 @@ export class GameScene extends Scene {
         // Banked coins carry over between runs; pending coins do not, since the
         // mountain that held them is about to be rebuilt.
         this.pendingCoins = 0;
-        this.dispatchCoinUpdate();
 
         // Listen for collision with Cosmic Hazard sensor bodies
         this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
@@ -769,7 +749,44 @@ export class GameScene extends Scene {
         // collected again on every frame it overlaps the player.
         this.levelGenerator?.removeCoin(coin);
         coin.collect();
-        this.dispatchCoinUpdate();
+        this.spawnPickupPopup(coin.x, coin.y);
+    }
+
+    /**
+     * A brief `+1` where the coin was.
+     *
+     * Coins carry no HUD counter, so this is the only confirmation that one was
+     * actually taken. Drawing it in world space means it sits on the coin rather
+     * than at a fixed screen corner, which is what makes a pickup in a fast climb
+     * legible at all.
+     *
+     * It rises and fades on its own, so nothing has to clean it up: the tween's
+     * onComplete destroys the text.
+     */
+    private spawnPickupPopup(x: number, y: number): void {
+        const label = this.add
+            .text(x, y, '+1', {
+                fontFamily: 'monospace',
+                fontSize: '20px',
+                fontStyle: 'bold',
+                color: '#ffd76a',
+                stroke: '#3a2600',
+                strokeThickness: 4,
+            })
+            .setOrigin(0.5)
+            // Above the coins and hazards, so it is never occluded by a platform.
+            .setDepth(60);
+
+        this.tweens.add({
+            targets: label,
+            y: y - 52,
+            alpha: 0,
+            // Slow out: the label should still be legible for most of its life
+            // rather than blinking away.
+            duration: 700,
+            ease: 'Quad.easeOut',
+            onComplete: () => label.destroy(),
+        });
     }
 
     /**
@@ -818,7 +835,6 @@ export class GameScene extends Scene {
 
         this.bankedCoins += this.pendingCoins;
         this.pendingCoins = 0;
-        this.dispatchCoinUpdate();
     }
 
     private handleHazardImpact(hazardBody: MatterJS.BodyType): void {
@@ -906,7 +922,6 @@ export class GameScene extends Scene {
             if (data.success && typeof data.coins === 'number') {
                 this.bankedCoins = data.coins;
                 this.pendingCoins = 0;
-                this.dispatchCoinUpdate();
             }
 
         } catch (error) {

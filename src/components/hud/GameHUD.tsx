@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import CoinIcon from '../shared/CoinIcon';
 
 interface GameHUDProps {
     onAbort: () => void;
@@ -11,12 +10,6 @@ interface AltitudeDetail {
     altitude: number;
     maxAltitude: number;
     zone: string;
-}
-
-interface CoinDetail {
-    coins: number;
-    banked: number;
-    pending: number;
 }
 
 export default function GameHUD({ onAbort }: GameHUDProps) {
@@ -29,7 +22,6 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         return 0;
     });
     const [zone, setZone] = useState<string>('SURFACE');
-    const [coins, setCoins] = useState<CoinDetail>({ coins: 0, banked: 0, pending: 0 });
 
     useEffect(() => {
         const handleAltitudeUpdate = (e: Event) => {
@@ -41,11 +33,6 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
             }
         };
 
-        const handleCoinUpdate = (e: Event) => {
-            const detail = (e as CustomEvent<CoinDetail>).detail;
-            if (detail) setCoins(detail);
-        };
-
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -54,12 +41,10 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         };
 
         window.addEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
-        window.addEventListener('tetherverse:coin-update', handleCoinUpdate);
         window.addEventListener('keydown', handleKeyDown);
 
         return () => {
             window.removeEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
-            window.removeEventListener('tetherverse:coin-update', handleCoinUpdate);
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [onAbort]);
@@ -98,31 +83,6 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                         ESC
                     </span>
                 </button>
-
-                {/* Coin Purse.
-                    An icon beside the number, not a counter panel: the altimeter next
-                    to it is the thing being watched, and a second large numeral
-                    competed with it for the eye.
-                    Unbanked coins render as extra muted icons, so the number is never
-                    the only signal that a haul is still at risk. */}
-                <div
-                    className="pointer-events-auto flex items-center gap-2 bg-zinc-950/80 hover:bg-zinc-900 border border-amber-500/30 text-amber-300 px-3.5 py-2 rounded-xl font-mono text-xs font-semibold tracking-wider backdrop-blur-md transition-all duration-150 shadow-sm cursor-default select-none"
-                    title="Coins are kept when you land on solid ground. Coins on the risk line are lost if the run ends first."
-                >
-                    <span className="sr-only">Coins</span>
-                    <CoinIcon size={18} />
-                    <span className="tabular-nums text-white">{coins.banked.toLocaleString()}</span>
-
-                    {coins.pending > 0 && (
-                        <>
-                            <CoinIcon size={14} muted className="-ml-1" />
-                            <span className="tabular-nums text-amber-300/90">
-                                {coins.pending}
-                            </span>
-                            <span className="sr-only">unbanked</span>
-                        </>
-                    )}
-                </div>
 
                 {/* Cyberpunk Altimeter Module */}
                 <div className="pointer-events-auto flex flex-col items-end gap-1.5 bg-slate-950/70 border border-cyan-500/30 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_0_30px_rgba(6,182,212,0.15)]">

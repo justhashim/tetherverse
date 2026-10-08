@@ -498,21 +498,39 @@ export default function Home() {
                       <span className="text-sm font-normal text-violet-500 ml-0.5">m</span>
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-amber-500/25 bg-slate-950/60 p-4">
-                    <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
-                      Coins
-                    </p>
-                    <p className="mt-1 flex items-center gap-1.5 font-mono font-black text-3xl text-amber-400">
-                      <CoinIcon size={26} />
-                      <span className="tabular-nums">{(gameOver.coins ?? 0).toLocaleString()}</span>
-                    </p>
-                    {gameOver.lostCoins > 0 && (
-                      <p className="mt-1 flex items-center gap-1 font-mono text-[10px] tracking-wider text-rose-400/80">
-                        <CoinIcon size={11} muted />
-                        <span>{gameOver.lostCoins} LOST</span>
+                  {/* Coins stay hidden during the run, so the tally is only ever
+                      revealed here. It appears only once there is something to say:
+                      a player who never took the risk line sees no coin tile at all,
+                      which keeps the system a secret rather than an empty readout. */}
+                  {(gameOver.coins ?? 0) > 0 || gameOver.lostCoins > 0 ? (
+                    <div className="rounded-2xl border border-amber-500/25 bg-slate-950/60 p-4">
+                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
+                        Coins
                       </p>
-                    )}
-                  </div>
+                      <p className="mt-1 flex items-center gap-1.5 font-mono font-black text-3xl text-amber-400">
+                        <CoinIcon size={26} />
+                        <span className="tabular-nums">
+                          {(gameOver.coins ?? 0).toLocaleString()}
+                        </span>
+                      </p>
+                      {gameOver.lostCoins > 0 && (
+                        <p className="mt-1 flex items-center gap-1 font-mono text-[10px] tracking-wider text-rose-400/80">
+                          <CoinIcon size={11} muted />
+                          <span>{gameOver.lostCoins} LOST</span>
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    // Keeps the three-column grid intact when the tile is absent,
+                    // so the altitude pair does not stretch across the row.
+                    <div className="rounded-2xl border border-slate-800/40 bg-slate-950/30 p-4 flex items-center justify-center">
+                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-600 uppercase text-center leading-relaxed">
+                        No coins
+                        <br />
+                        found
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Controls */}
