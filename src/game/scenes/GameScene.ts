@@ -73,9 +73,19 @@ export class GameScene extends Scene {
     // Fetch the high score from the database and update the static variable
     private async loadDatabaseHighScore() {
         try {
-            const response = await fetch('/api/score');
+            // This endpoint needs a verified Excel Play identity, so it must carry
+            // the same bearer the score save uses. Without the header the request
+            // is always 401 and the database best never seeds maxAltitudeMeters.
+            const bridgeToken = typeof window !== 'undefined'
+                ? window.__summitJackAuthToken
+                : null;
 
-            // If they aren't logged in, the API returns 401 Unauthorized. Just abort silently.
+            const response = await fetch('/api/score', {
+                headers: bridgeToken ? { Authorization: `Bearer ${bridgeToken}` } : {},
+            });
+
+            // Anonymous boot, or the launcher has not delivered a token yet. Abort
+            // quietly: the menu falls back to the locally stored best.
             if (!response.ok) return;
 
             const data = await response.json();
