@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Bridge between summit-jack and the Excel Play launcher.
+ * Bridge between Tetherverse and the Excel Play launcher.
  *
- * When summit-jack runs standalone the Excel Play accounts own sign-in. When it is
+ * When Tetherverse runs standalone the Excel Play accounts own sign-in. When it is
  * embedded in the launcher the launcher supplies an Excel Play access token over
  * postMessage; we then verify that token against the accounts backend before
  * trusting a single field of it.
