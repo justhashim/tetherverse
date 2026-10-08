@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import NextImage from "next/image";
 import GameCanvas from "@/src/components/GameCanvas";
 import GameHUD from "@/src/components/hud/GameHUD";
+import CoinIcon from "@/src/components/shared/CoinIcon";
 import MainMenu from "@/src/components/menu/MainMenu";
 import LeaderboardPanel from "@/src/components/leaderboard/LeaderboardPanel";
 import MultiverseBackground from "@/src/components/menu/MultiverseBackground";
@@ -501,12 +502,14 @@ export default function Home() {
                     <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
                       Coins
                     </p>
-                    <p className="mt-1 font-mono font-black text-3xl text-amber-400">
-                      {(gameOver.coins ?? 0).toLocaleString()}
+                    <p className="mt-1 flex items-center gap-1.5 font-mono font-black text-3xl text-amber-400">
+                      <CoinIcon size={26} />
+                      <span className="tabular-nums">{(gameOver.coins ?? 0).toLocaleString()}</span>
                     </p>
                     {gameOver.lostCoins > 0 && (
-                      <p className="mt-0.5 font-mono text-[10px] tracking-wider text-rose-400/80">
-                        {gameOver.lostCoins} LOST
+                      <p className="mt-1 flex items-center gap-1 font-mono text-[10px] tracking-wider text-rose-400/80">
+                        <CoinIcon size={11} muted />
+                        <span>{gameOver.lostCoins} LOST</span>
                       </p>
                     )}
                   </div>

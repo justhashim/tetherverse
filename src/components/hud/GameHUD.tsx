@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import CoinIcon from '../shared/CoinIcon';
 
 interface GameHUDProps {
     onAbort: () => void;
@@ -98,25 +99,28 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                     </span>
                 </button>
 
-                {/* Coin Purse. Pending coins are shown dimmed because they are on the
-                    mountain, not banked: the run can still take them. */}
+                {/* Coin Purse.
+                    An icon beside the number, not a counter panel: the altimeter next
+                    to it is the thing being watched, and a second large numeral
+                    competed with it for the eye.
+                    Unbanked coins render as extra muted icons, so the number is never
+                    the only signal that a haul is still at risk. */}
                 <div
-                    className="pointer-events-auto flex flex-col items-start gap-1 bg-slate-950/70 border border-amber-500/30 backdrop-blur-md rounded-2xl px-4 py-3 shadow-[0_0_30px_rgba(245,158,11,0.12)]"
+                    className="pointer-events-auto flex items-center gap-2 bg-zinc-950/80 hover:bg-zinc-900 border border-amber-500/30 text-amber-300 px-3.5 py-2 rounded-xl font-mono text-xs font-semibold tracking-wider backdrop-blur-md transition-all duration-150 shadow-sm cursor-default select-none"
                     title="Coins are kept when you land on solid ground. Coins on the risk line are lost if the run ends first."
                 >
-                    <div className="flex items-center gap-1.5 font-mono text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-950/40 text-amber-300">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]" />
-                        <span>COINS</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                        <span className="font-mono font-black text-2xl md:text-3xl text-white tracking-tight">
-                            {coins.coins.toLocaleString()}
-                        </span>
-                    </div>
+                    <span className="sr-only">Coins</span>
+                    <CoinIcon size={18} />
+                    <span className="tabular-nums text-white">{coins.banked.toLocaleString()}</span>
+
                     {coins.pending > 0 && (
-                        <div className="font-mono text-[10px] tracking-wider text-amber-400/80">
-                            <span className="text-amber-300 font-bold">+{coins.pending}</span> UNBANKED
-                        </div>
+                        <>
+                            <CoinIcon size={14} muted className="-ml-1" />
+                            <span className="tabular-nums text-amber-300/90">
+                                {coins.pending}
+                            </span>
+                            <span className="sr-only">unbanked</span>
+                        </>
                     )}
                 </div>
 
