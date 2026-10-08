@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface AnimatedButtonProps {
     children: React.ReactNode;
@@ -32,11 +32,15 @@ export default function AnimatedButton({
         }
     };
 
+    // A button that lifts and squashes is decoration. Honouring the preference
+    // here costs one hook and removes the only motion these controls produce.
+    const reduced = useReducedMotion();
+
     return (
         <motion.button
             type={type}
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={reduced ? undefined : { y: -1 }}
+            whileTap={reduced ? undefined : { scale: 0.98 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
             onClick={onClick}
             className={`group relative w-full sm:w-auto min-h-[48px] md:min-h-[52px] px-6 py-3.5 font-mono text-xs md:text-sm tracking-wider uppercase rounded-xl transition-colors duration-150 flex items-center justify-center gap-2.5 cursor-pointer select-none ${getVariantClasses()} ${className}`}

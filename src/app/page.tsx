@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { MotionConfig } from "framer-motion";
 import NextImage from "next/image";
 import GameCanvas from "@/src/components/GameCanvas";
 import GameHUD from "@/src/components/hud/GameHUD";
@@ -117,7 +118,7 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(6,182,212,0.06)_0%,transparent_60%)] animate-pulse pointer-events-none" />
           <div className="relative font-mono text-xs md:text-sm tracking-[0.4em] text-cyan-400 uppercase animate-[pulse_2s_infinite] text-center px-4 pointer-events-none">
-            — CLICK ANYWHERE TO INITIALIZE —
+            {'// CLICK ANYWHERE TO INITIALIZE //'}
           </div>
         </div>
       ) : (
@@ -146,6 +147,13 @@ function IntroVideo({ onComplete }: { onComplete: () => void }) {
 }
 
 // --- Main Application Root ---
+/**
+ * `reducedMotion="user"` is declared once here rather than per component. It
+ * disables transform and layout animations across the whole tree while leaving
+ * opacity alone, so menu entrances still fade in instead of appearing instantly
+ * at full visibility. The CSS block in globals.css covers the `animate-*`
+ * utilities, which know nothing about this setting.
+ */
 export default function Home() {
   const excelSession = useExcelSession();
   const bridge = useBridgeAuth();
@@ -388,175 +396,177 @@ export default function Home() {
   }
 
   return (
-    <main className="relative w-screen min-h-[100dvh] h-[100dvh] overflow-hidden bg-[#02040a] text-white select-none">
-      {/* Intro Video Layer */}
-      {currentView === 'intro' && (
-        <IntroVideo
-          onComplete={() => {
-            setIsMenuMounted(true);
-            setCurrentView("menu");
-          }}
-        />
-      )}
-
-      {/* Main Launcher Interface */}
-      {(currentView === 'menu' || currentView === 'leaderboard' || isMenuMounted) && (
-        <div
-          className={`absolute inset-0 transition-opacity duration-700 ${currentView === 'menu' || currentView === 'leaderboard'
-            ? "z-20 opacity-100 pointer-events-auto"
-            : "z-0 opacity-0 pointer-events-none"
-            }`}
-        >
-          <MainMenu
-            onPlay={() => setCurrentView('playing')}
-            onOpenLeaderboard={() => setCurrentView('leaderboard')}
-            onLogout={handleLogout}
-            user={identity}
-            bestAltitude={bestAltitude}
+    <MotionConfig reducedMotion="user">
+      <main className="relative w-screen min-h-[100dvh] h-[100dvh] overflow-hidden bg-[#02040a] text-white select-none">
+        {/* Intro Video Layer */}
+        {currentView === 'intro' && (
+          <IntroVideo
+            onComplete={() => {
+              setIsMenuMounted(true);
+              setCurrentView("menu");
+            }}
           />
-        </div>
-      )}
+        )}
 
-      {/* Global Rankings Telemetry Panel */}
-      {currentView === 'leaderboard' && (
-        <LeaderboardPanel
-          onClose={() => setCurrentView('menu')}
-          currentUserId={identity.id}
-        />
-      )}
+        {/* Main Launcher Interface */}
+        {(currentView === 'menu' || currentView === 'leaderboard' || isMenuMounted) && (
+          <div
+            className={`absolute inset-0 transition-opacity duration-700 ${currentView === 'menu' || currentView === 'leaderboard'
+              ? "z-20 opacity-100 pointer-events-auto"
+              : "z-0 opacity-0 pointer-events-none"
+              }`}
+          >
+            <MainMenu
+              onPlay={() => setCurrentView('playing')}
+              onOpenLeaderboard={() => setCurrentView('leaderboard')}
+              onLogout={handleLogout}
+              user={identity}
+              bestAltitude={bestAltitude}
+            />
+          </div>
+        )}
 
-      {/* Active Game Canvas & In-Game React HUD */}
-      {(currentView === 'playing' || isMenuMounted) && (
-        <div
-          className={`w-full h-full absolute inset-0 transition-opacity duration-700 ${currentView === 'playing'
-            ? "z-30 opacity-100 pointer-events-auto"
-            : "z-10 opacity-30 pointer-events-none"
-            }`}
-        >
-          <GameCanvas key={gameKey} isActive={currentView === 'playing'} />
+        {/* Global Rankings Telemetry Panel */}
+        {currentView === 'leaderboard' && (
+          <LeaderboardPanel
+            onClose={() => setCurrentView('menu')}
+            currentUserId={identity.id}
+          />
+        )}
 
-          {currentView === 'playing' && (
-            <GameHUD onAbort={handleExitToLauncher} />
-          )}
+        {/* Active Game Canvas & In-Game React HUD */}
+        {(currentView === 'playing' || isMenuMounted) && (
+          <div
+            className={`w-full h-full absolute inset-0 transition-opacity duration-700 ${currentView === 'playing'
+              ? "z-30 opacity-100 pointer-events-auto"
+              : "z-10 opacity-30 pointer-events-none"
+              }`}
+          >
+            <GameCanvas key={gameKey} isActive={currentView === 'playing'} />
 
-          {/* Game Over Modal (Signal Lost) */}
-          {gameOver && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 select-none">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(239,68,68,0.12)_0%,rgba(139,92,246,0.12)_40%,transparent_70%)] pointer-events-none" />
+            {currentView === 'playing' && (
+              <GameHUD onAbort={handleExitToLauncher} />
+            )}
 
-              <div className="relative w-full max-w-md bg-slate-900/70 border border-violet-500/30 rounded-3xl shadow-[0_0_60px_rgba(139,92,246,0.25)] overflow-hidden p-7 md:p-8 text-center backdrop-blur-xl">
-                {/* Top Glowing Red Accent */}
-                <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-transparent via-red-500/80 to-transparent shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
+            {/* Game Over Modal (Signal Lost) */}
+            {gameOver && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 select-none">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(239,68,68,0.12)_0%,rgba(139,92,246,0.12)_40%,transparent_70%)] pointer-events-none" />
 
-                {/* Multiverse Emblem */}
-                <div className="relative w-20 h-20 mx-auto rounded-full border border-red-500/40 bg-slate-950/80 p-1 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.25)]">
-                  <div className="absolute inset-[-4px] border border-dashed border-red-500/30 rounded-full animate-[spin_20s_linear_infinite]" />
-                  <NextImage
-                    src="/logo.png"
-                    alt=""
-                    width={72}
-                    height={72}
-                    className="w-full h-full object-contain rounded-full filter hue-rotate-180 brightness-95"
-                  />
-                </div>
+                <div className="relative w-full max-w-md bg-slate-900/70 border border-violet-500/30 rounded-3xl shadow-[0_0_60px_rgba(139,92,246,0.25)] overflow-hidden p-7 md:p-8 text-center backdrop-blur-xl">
+                  {/* Top Glowing Red Accent */}
+                  <div className="absolute top-0 inset-x-0 h-0.5 bg-linear-to-r from-transparent via-red-500/80 to-transparent shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
 
-                <p className="mt-5 font-mono text-[10px] tracking-[0.4em] text-red-400 uppercase">
-                  Node Status // Signal Lost
-                </p>
-                <h2 className="mt-1 font-black text-4xl md:text-5xl tracking-tight uppercase text-transparent bg-clip-text bg-linear-to-r from-red-400 via-rose-300 to-amber-300">
-                  Rift Collapsed
-                </h2>
-                <p className="mt-1 text-slate-400 font-mono text-xs tracking-widest uppercase">
-                  Descent threshold exceeded
-                </p>
-
-                {/* New Record Fanfare */}
-                {gameOver.altitude >= gameOver.best && gameOver.altitude > 0 && (
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-950/50 px-4 py-1.5 font-mono text-xs tracking-widest text-cyan-300 uppercase shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                    ⚡ New Dimensional Record!
+                  {/* Multiverse Emblem */}
+                  <div className="relative w-20 h-20 mx-auto rounded-full border border-red-500/40 bg-slate-950/80 p-1 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.25)]">
+                    <div className="absolute inset-[-4px] border border-dashed border-red-500/30 rounded-full animate-[spin_20s_linear_infinite]" />
+                    <NextImage
+                      src="/logo.png"
+                      alt=""
+                      width={72}
+                      height={72}
+                      className="w-full h-full object-contain rounded-full filter hue-rotate-180 brightness-95"
+                    />
                   </div>
-                )}
 
-                {/* Stat Grid */}
-                <div className="mt-6 grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-                    <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
-                      Final Altitude
-                    </p>
-                    <p className="mt-1 font-mono font-black text-3xl text-cyan-400">
-                      {gameOver.altitude}
-                      <span className="text-sm font-normal text-cyan-500 ml-0.5">m</span>
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
-                    <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
-                      Sector Best
-                    </p>
-                    <p className="mt-1 font-mono font-black text-3xl text-violet-400">
-                      {gameOver.best}
-                      <span className="text-sm font-normal text-violet-500 ml-0.5">m</span>
-                    </p>
-                  </div>
-                  {/* Coins stay hidden during the run, so the tally is only ever
-                      revealed here. It appears only once there is something to say:
-                      a player who never took the risk line sees no coin tile at all,
-                      which keeps the system a secret rather than an empty readout. */}
-                  {(gameOver.coins ?? 0) > 0 || gameOver.lostCoins > 0 ? (
-                    <div className="rounded-2xl border border-amber-500/25 bg-slate-950/60 p-4">
-                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
-                        Coins
-                      </p>
-                      <p className="mt-1 flex items-center gap-1.5 font-mono font-black text-3xl text-amber-400">
-                        <CoinIcon size={26} />
-                        <span className="tabular-nums">
-                          {(gameOver.coins ?? 0).toLocaleString()}
-                        </span>
-                      </p>
-                      {gameOver.lostCoins > 0 && (
-                        <p className="mt-1 flex items-center gap-1 font-mono text-[10px] tracking-wider text-rose-400/80">
-                          <CoinIcon size={11} muted />
-                          <span>{gameOver.lostCoins} LOST</span>
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    // Keeps the three-column grid intact when the tile is absent,
-                    // so the altitude pair does not stretch across the row.
-                    <div className="rounded-2xl border border-slate-800/40 bg-slate-950/30 p-4 flex items-center justify-center">
-                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-600 uppercase text-center leading-relaxed">
-                        No coins
-                        <br />
-                        found
-                      </p>
+                  <p className="mt-5 font-mono text-[10px] tracking-[0.4em] text-red-400 uppercase">
+                    Node Status // Signal Lost
+                  </p>
+                  <h2 className="mt-1 font-black text-4xl md:text-5xl tracking-tight uppercase text-transparent bg-clip-text bg-linear-to-r from-red-400 via-rose-300 to-amber-300">
+                    Rift Collapsed
+                  </h2>
+                  <p className="mt-1 text-slate-400 font-mono text-xs tracking-widest uppercase">
+                    Descent threshold exceeded
+                  </p>
+
+                  {/* New Record Fanfare */}
+                  {gameOver.altitude >= gameOver.best && gameOver.altitude > 0 && (
+                    <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-950/50 px-4 py-1.5 font-mono text-xs tracking-widest text-cyan-300 uppercase shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                      ⚡ New Dimensional Record!
                     </div>
                   )}
-                </div>
 
-                {/* Action Controls */}
-                <div className="mt-7 flex flex-col gap-3">
-                  <button
-                    onClick={handleRerun}
-                    className="group relative w-full bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-950 px-8 py-3.5 rounded-xl font-mono font-bold text-sm tracking-wider uppercase border border-zinc-200 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer select-none"
-                  >
-                    <span>▶ RE-ENGAGE ASCENT</span>
-                    <span className="text-[10px] bg-zinc-200/80 border border-zinc-300 text-zinc-800 px-1.5 py-0.5 rounded font-mono font-semibold">
-                      SPACE / ↵
-                    </span>
-                  </button>
-                  <button
-                    onClick={handleExitToLauncher}
-                    className="w-full bg-zinc-900/90 hover:bg-zinc-800 active:bg-zinc-950 text-zinc-200 hover:text-white px-8 py-3 rounded-xl font-mono font-semibold text-xs tracking-wider uppercase border border-zinc-800 hover:border-zinc-700 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer select-none"
-                  >
-                    <span>RETURN TO LAUNCHER</span>
-                    <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded font-mono font-normal">ESC</span>
-                  </button>
+                  {/* Stat Grid */}
+                  <div className="mt-6 grid grid-cols-3 gap-3">
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
+                        Final Altitude
+                      </p>
+                      <p className="mt-1 font-mono font-black text-3xl text-cyan-400">
+                        {gameOver.altitude}
+                        <span className="text-sm font-normal text-cyan-500 ml-0.5">m</span>
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+                      <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
+                        Sector Best
+                      </p>
+                      <p className="mt-1 font-mono font-black text-3xl text-violet-400">
+                        {gameOver.best}
+                        <span className="text-sm font-normal text-violet-500 ml-0.5">m</span>
+                      </p>
+                    </div>
+                    {/* Coins stay hidden during the run, so the tally is only ever
+                        revealed here. It appears only once there is something to say:
+                        a player who never took the risk line sees no coin tile at all,
+                        which keeps the system a secret rather than an empty readout. */}
+                    {(gameOver.coins ?? 0) > 0 || gameOver.lostCoins > 0 ? (
+                      <div className="rounded-2xl border border-amber-500/25 bg-slate-950/60 p-4">
+                        <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
+                          Coins
+                        </p>
+                        <p className="mt-1 flex items-center gap-1.5 font-mono font-black text-3xl text-amber-400">
+                          <CoinIcon size={26} />
+                          <span className="tabular-nums">
+                            {(gameOver.coins ?? 0).toLocaleString()}
+                          </span>
+                        </p>
+                        {gameOver.lostCoins > 0 && (
+                          <p className="mt-1 flex items-center gap-1 font-mono text-[10px] tracking-wider text-rose-400/80">
+                            <CoinIcon size={11} muted />
+                            <span>{gameOver.lostCoins} LOST</span>
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      // Keeps the three-column grid intact when the tile is absent,
+                      // so the altitude pair does not stretch across the row.
+                      <div className="rounded-2xl border border-slate-800/40 bg-slate-950/30 p-4 flex items-center justify-center">
+                        <p className="font-mono text-[10px] tracking-[0.25em] text-slate-600 uppercase text-center leading-relaxed">
+                          No coins
+                          <br />
+                          found
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Controls */}
+                  <div className="mt-7 flex flex-col gap-3">
+                    <button
+                      onClick={handleRerun}
+                      className="group relative w-full bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-950 px-8 py-3.5 rounded-xl font-mono font-bold text-sm tracking-wider uppercase border border-zinc-200 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2.5 cursor-pointer select-none"
+                    >
+                      <span>▶ RE-ENGAGE ASCENT</span>
+                      <span className="text-[10px] bg-zinc-200/80 border border-zinc-300 text-zinc-800 px-1.5 py-0.5 rounded font-mono font-semibold">
+                        SPACE / ↵
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleExitToLauncher}
+                      className="w-full bg-zinc-900/90 hover:bg-zinc-800 active:bg-zinc-950 text-zinc-200 hover:text-white px-8 py-3 rounded-xl font-mono font-semibold text-xs tracking-wider uppercase border border-zinc-800 hover:border-zinc-700 shadow-sm transition-colors duration-150 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer select-none"
+                    >
+                      <span>RETURN TO LAUNCHER</span>
+                      <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded font-mono font-normal">ESC</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
-    </main>
+            )}
+          </div>
+        )}
+      </main>
+    </MotionConfig>
   );
 }

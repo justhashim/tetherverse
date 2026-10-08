@@ -185,13 +185,12 @@ export default function MainMenu({
                 </motion.div>
             </main>
 
-            {/* FOOTER METADATA ENGINE */}
-            <footer className="w-full flex justify-between items-center z-20 font-mono text-[9px] md:text-[11px] text-slate-500 tracking-wider pb-1">
-                <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                    <span>STATION // LINKED</span>
-                </div>
-                <span>v2.4.0-MULTIVERSE</span>
+            {/* Footer carries no version string and no status dot. The dot was
+                asserting a connection state the client never observes, so it was
+                decoration that lied; the version string was a CLI fixture on what is
+                effectively a menu page. */}
+            <footer className="w-full flex justify-end items-center z-20 font-mono text-[9px] md:text-[11px] text-slate-400 tracking-wider pb-1">
+                <span>HOLD SPACE TO LAUNCH</span>
             </footer>
         </div>
     );
