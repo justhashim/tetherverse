@@ -30,6 +30,15 @@ type Beat =
     | "HIGH_RISK"
     | "MAJOR_CLIMB";
 
+/**
+ * Which difficulty band an altitude falls in, ordered easiest to hardest.
+ *
+ * Everything that ramps with difficulty reads this rather than raw altitude, so
+ * moving a boundary in GAME_CONSTANTS.ALTITUDE moves the platform shapes, the
+ * crumbling rolls and the hazard density together.
+ */
+export type DifficultyTier = 'TUTORIAL' | 'INTERMEDIATE' | 'HARD' | 'EXPERT' | 'ENDLESS';
+
 export interface DifficultyProfile {
     widthMin: number;
     widthMax: number;
@@ -113,6 +122,15 @@ export class LevelGenerator {
     private lastPattern: PatternId | null = null;
     private currentProfile: DifficultyProfile;
     private currentAltitudeMeters: number = 0;
+      /**
+       * Highest altitude reached this run. Difficulty is selected from this rather
+       * than from the live altitude, so falling never makes the mountain kinder.
+       *
+       * A launch tops out near 96 m/s, enough to cross a whole tier in one chain.
+       * Keying off the live altitude let a strong player reach ENDLESS without a
+       * single platform being generated for the bands in between.
+       */
+      private peakAltitudeMeters: number = 0;
     private currentDirection: number = 1; // 1 = ascending rightward, -1 = ascending leftward
     private stepsInDirection: number = 0;
 
@@ -198,7 +216,10 @@ export class LevelGenerator {
     // --- Public update: keep a distance-based lookahead ahead, then cull behind. ---
     public update(playerX: number, playerY: number, altitudeMeters: number): void {
         this.currentAltitudeMeters = altitudeMeters;
-        this.currentProfile = this.getProfile(altitudeMeters);
+        if (altitudeMeters > this.peakAltitudeMeters) {
+            this.peakAltitudeMeters = altitudeMeters;
+        }
+        this.currentProfile = this.getProfile(this.peakAltitudeMeters);
 
         const proc = GAME_CONSTANTS.PROCEDURAL;
         // Distance-based lookahead, NOT a fixed platform count. TARGET_SPACING only
@@ -302,6 +323,9 @@ export class LevelGenerator {
     private currentBeat(profile: DifficultyProfile): Beat {
         if (profile.chainLength <= 0) return "CHALLENGE";
         const idx = Math.floor(this.committedCount / profile.chainLength) % BEAT_SEQUENCE.length;
+        // riskChance is the chance a HIGH_RISK slot is used as such. It is 1 past the
+        // tutorial, so those slots always land; only the tutorial, which must not
+        // introduce risk, downgrades them to RISK.
         if (BEAT_SEQUENCE[idx] === "HIGH_RISK" && this.rng() >= profile.riskChance) {
             return "RISK";
         }
@@ -573,13 +597,18 @@ export class LevelGenerator {
         profile: DifficultyProfile,
         spec: PatternSpec
     ): void {
-        // Roll crumbling platform chance at higher altitudes (starts at 220m)
+        // Crumbling and hazards follow the difficulty band rather than raw altitude, so
+        // they stay in step with the tier boundaries when those move.
+        const tier = this.tierFor(this.peakAltitudeMeters);
+
+        // Risk platforms are where a run is meant to be lost, so they crumble
+        // sooner and more often than ordinary ground. Recovery platforms are the
+        // safety net and must never crumble.
         let isCrumbling = false;
-        if (this.currentAltitudeMeters >= 220 && !spec.risk && !spec.recovery) {
-            const crumbleChance = this.currentAltitudeMeters >= 700 ? 0.40
-                : this.currentAltitudeMeters >= 450 ? 0.30
-                    : 0.20;
-            isCrumbling = this.rng() < crumbleChance;
+        if (spec.risk) {
+            isCrumbling = tier !== 'TUTORIAL' && tier !== 'INTERMEDIATE' && this.rng() < 0.35;
+        } else if (!spec.recovery && tier !== 'TUTORIAL') {
+            isCrumbling = this.rng() < (tier === 'EXPERT' || tier === 'ENDLESS' ? 0.22 : 0.12);
         }
 
         const platform = new BasePlatform(
@@ -639,14 +668,15 @@ export class LevelGenerator {
     }
 
     private maybeSpawnHazard(prevX: number, prevY: number, candX: number, candY: number): void {
-        if (this.currentAltitudeMeters < 200) return;
+        const tier = this.tierFor(this.peakAltitudeMeters);
+        if (tier === 'TUTORIAL') return;
 
         const dist = Math.hypot(candX - prevX, candY - prevY);
         if (dist < 200) return;
 
-        const hazardChance = this.currentAltitudeMeters >= 1000 ? 0.65
-            : this.currentAltitudeMeters >= 500 ? 0.45
-                : 0.30;
+        const hazardChance = tier === 'ENDLESS' ? 0.60
+            : tier === 'EXPERT' ? 0.45
+                : 0.25;
 
         if (this.rng() > hazardChance) return;
 
@@ -780,23 +810,33 @@ export class LevelGenerator {
     //  Difficulty selection
     // =====================================================================
 
-    private getProfile(altitudeMeters: number): DifficultyProfile {
-        const d = GAME_CONSTANTS.DIFFICULTY;
+    /**
+     * The band for an altitude. Everything that ramps with difficulty reads this
+     * rather than raw altitude, so moving a boundary in GAME_CONSTANTS.ALTITUDE
+     * moves the platform shapes, the crumbling rolls and the hazard density
+     * together rather than leaving them stranded at the old numbers.
+     */
+    private tierFor(altitudeMeters: number): DifficultyTier {
         const a = GAME_CONSTANTS.ALTITUDE;
-        if (altitudeMeters < a.INTERMEDIATE_ZONE) return d.TUTORIAL as DifficultyProfile;
-        if (altitudeMeters < a.HARD_ZONE) return d.INTERMEDIATE as DifficultyProfile;
-        if (altitudeMeters < a.EXPERT_ZONE) return d.HARD as DifficultyProfile;
-        if (altitudeMeters < a.ENDLESS_ZONE) return d.EXPERT as DifficultyProfile;
-        return d.ENDLESS as DifficultyProfile;
+        if (altitudeMeters < a.INTERMEDIATE_ZONE) return 'TUTORIAL';
+        if (altitudeMeters < a.HARD_ZONE) return 'INTERMEDIATE';
+        if (altitudeMeters < a.EXPERT_ZONE) return 'HARD';
+        if (altitudeMeters < a.ENDLESS_ZONE) return 'EXPERT';
+        return 'ENDLESS';
+    }
+
+    private getProfile(altitudeMeters: number): DifficultyProfile {
+        return GAME_CONSTANTS.DIFFICULTY[this.tierFor(altitudeMeters)] as DifficultyProfile;
     }
 
     public getZoneName(altitudeMeters: number): string {
-        const a = GAME_CONSTANTS.ALTITUDE;
-        if (altitudeMeters < a.INTERMEDIATE_ZONE) return "SURFACE";
-        if (altitudeMeters < a.HARD_ZONE) return "TROPOSPHERE";
-        if (altitudeMeters < a.EXPERT_ZONE) return "STRATOSPHERE";
-        if (altitudeMeters < a.ENDLESS_ZONE) return "MESOSPHERE";
-        return "EXOSPHERE";
+        switch (this.tierFor(altitudeMeters)) {
+            case 'TUTORIAL': return "SURFACE";
+            case 'INTERMEDIATE': return "TROPOSPHERE";
+            case 'HARD': return "STRATOSPHERE";
+            case 'EXPERT': return "MESOSPHERE";
+            case 'ENDLESS': return "EXOSPHERE";
+        }
     }
 
     // =====================================================================
@@ -854,12 +894,17 @@ export class LevelGenerator {
         let isUnstable = false;
         if (forceUnstable !== undefined) {
             isUnstable = forceUnstable;
-        } else if (this.currentAltitudeMeters >= 120) {
-            const roll = this.rng();
-            const threshold = this.currentAltitudeMeters >= 700 ? 0.55
-                : this.currentAltitudeMeters >= 350 ? 0.35
-                    : 0.20;
-            isUnstable = roll < threshold;
+        } else {
+            const tier = this.tierFor(this.peakAltitudeMeters);
+            if (tier !== 'TUTORIAL') {
+                // An unstable anchor gives way on contact, so it is the same kind of
+                // decision as a crumbling platform: rare early, common high up.
+                const threshold = tier === 'ENDLESS' ? 0.55
+                    : tier === 'EXPERT' ? 0.45
+                        : tier === 'HARD' ? 0.35
+                            : 0.20;
+                isUnstable = this.rng() < threshold;
+            }
         }
 
         const label = isUnstable ? 'HookAnchor_Unstable' : 'HookAnchor';

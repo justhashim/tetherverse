@@ -54,10 +54,14 @@ export const GAME_CONSTANTS = {
         CULL_DISTANCE: 3000,            // Destroy platforms/hooks this far below the player
     },
     ALTITUDE: {
-        INTERMEDIATE_ZONE: 120,         // Altitude (m) where the Intermediate tier begins (early variety)
-        HARD_ZONE: 350,                 // Altitude (m) where the Hard tier begins
-        EXPERT_ZONE: 700,               // Altitude (m) where the Expert tier begins
-        ENDLESS_ZONE: 1500,             // Altitude (m) where the Endless Mastery tier begins
+        // Altitude is 10px = 1m and platforms sit 140-250px apart (14-25m), so
+        // these gates decide how many hops a tier lasts. The previous
+        // 120/350/700/1500 put four tiers inside the first handful of jumps,
+        // before a run had a shape.
+        INTERMEDIATE_ZONE: 120,         // Altitude (m) where the Intermediate tier begins
+        HARD_ZONE: 500,                 // Altitude (m) where the Hard tier begins
+        EXPERT_ZONE: 1200,              // Altitude (m) where the Expert tier begins
+        ENDLESS_ZONE: 2400,             // Altitude (m) where the Endless Mastery tier begins
     },
     DIFFICULTY: {
         // Width ranges are the BasePlatform width parameter (~visual width / 2).
@@ -73,7 +77,7 @@ export const GAME_CONSTANTS = {
             anchorLiftMin: 140, anchorLiftMax: 200,
             anchorOffsetMax: 40,
             recoveryChance: 0.30,                   // authored recovery riders
-            riskChance: 0,                          // no high-risk shortcuts yet
+            riskChance: 0,                          // tutorial never introduces risk
             chainLength: 4,                         // platforms per adrenaline beat
             voidMargin: 300,                        // forgiving death-void
             patterns: [
@@ -94,7 +98,7 @@ export const GAME_CONSTANTS = {
             anchorLiftMin: 170, anchorLiftMax: 250,
             anchorOffsetMax: 80,
             recoveryChance: 0.20,
-            riskChance: 0.10,
+            riskChance: 1,
             chainLength: 5,
             voidMargin: 240,
             patterns: [
@@ -119,7 +123,7 @@ export const GAME_CONSTANTS = {
             anchorLiftMin: 200, anchorLiftMax: 300,
             anchorOffsetMax: 120,
             recoveryChance: 0.14,
-            riskChance: 0.18,
+            riskChance: 1,
             chainLength: 5,
             voidMargin: 200,
             patterns: [
@@ -144,7 +148,7 @@ export const GAME_CONSTANTS = {
             anchorLiftMin: 230, anchorLiftMax: 330,
             anchorOffsetMax: 150,
             recoveryChance: 0.10,
-            riskChance: 0.25,
+            riskChance: 1,
             chainLength: 6,
             voidMargin: 170,
             patterns: [
@@ -170,7 +174,7 @@ export const GAME_CONSTANTS = {
             anchorLiftMin: 240, anchorLiftMax: 340,
             anchorOffsetMax: 170,
             recoveryChance: 0.08,
-            riskChance: 0.30,
+            riskChance: 1,
             chainLength: 7,
             voidMargin: 150,
             patterns: [
