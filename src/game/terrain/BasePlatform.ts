@@ -6,12 +6,23 @@ export interface SurfaceProperties {
     restitution: number;     // Bounciness on direct impact
     isSlippery?: boolean;    // Custom modifier flag for the Frozen biome
     isCrumbling?: boolean;   // Fragile high-altitude crumbling platform
+    isRisk?: boolean;        // Risk line: narrow, crumbling sooner, and carries coins
 }
 
 export class BasePlatform extends Phaser.GameObjects.Image {
     public override body!: MatterJS.BodyType;
     public surfaceProps: SurfaceProperties;
     public isCrumblingTriggered: boolean = false;
+
+    /**
+     * True for platforms on the risk line.
+     *
+     * Read by the coin banking rule: a landing on risky ground does not bank the
+     * haul, because otherwise a bounce off a risk platform would make the risk free.
+     */
+    public isRiskPlatform(): boolean {
+        return this.surfaceProps.isRisk === true;
+    }
 
     constructor(
         scene: Phaser.Scene,
@@ -34,6 +45,10 @@ export class BasePlatform extends Phaser.GameObjects.Image {
         if (props.isCrumbling) {
             // Distinct fractured violet/fuchsia appearance for fragile platforms
             this.setTint(0xd946ef);
+        } else if (props.isRisk) {
+            // Amber, so a risk platform reads as a choice rather than as scenery.
+            // Crumbling takes precedence visually, since it is the sharper hazard.
+            this.setTint(0xffb347);
         }
 
         this.body = scene.matter.add.rectangle(x, y, visualWidth, visualHeight, {

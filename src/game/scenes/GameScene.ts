@@ -2,8 +2,20 @@ import Phaser, { Scene } from "phaser";
 import { Player } from "../entities/Player";
 import { GAME_CONSTANTS } from "../config/game-constants";
 import { BasePlatform } from "../terrain/BasePlatform";
+import { Coin, createCoinTexture } from "../terrain/Coin";
 import { PivotEngine } from "../physics/PivotEngine";
 import { LevelGenerator } from "../levels/LevelGenerator";
+
+/**
+ * Vertical speed below which the player counts as settled rather than flying past.
+ *
+ * Matter's velocity is in pixels per timestep, so this is small. It exists to stop
+ * a fast arc that clips a platform on the way up from banking a haul.
+ */
+const BANKING_REST_SPEED = 2;
+
+/** How far the player's feet may sit from a platform top and still count as a landing. */
+const BANKING_FOOT_TOLERANCE = 18;
 
 export class GameScene extends Scene {
     private player!: Player;
@@ -25,6 +37,19 @@ export class GameScene extends Scene {
 
     private groundReferenceY: number = 1200;
     private maxAltitudeMeters: number = 0;
+
+    /**
+     * Coins held this run.
+     *
+     * PENDING are on the mountain and lost if the run ends before they are banked.
+     * BANKED are safe, and survive the run, because coins are never spent.
+     *
+     * Banking happens by landing on ordinary ground. That is what keeps a risk line
+     * a decision rather than a gift: the coins are only yours once you have proven
+     * you can still climb.
+     */
+    private pendingCoins: number = 0;
+    private bankedCoins: number = 0;
     private currentAltitudeMeters: number = 0; // Live altitude used to pick the difficulty tier
     private levelSeed: number = 0;
 
@@ -55,6 +80,24 @@ export class GameScene extends Scene {
 
         // 🚀 Fire off the background fetch to sync with the cloud
         this.loadDatabaseHighScore();
+    }
+
+    /**
+     * Tells the React layer how many coins the player holds.
+     *
+     * Mirrors the altitude event rather than exposing a second channel, so the HUD
+     * has one place to read run state from.
+     */
+    public dispatchCoinUpdate() {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('tetherverse:coin-update', {
+                detail: {
+                    coins: this.bankedCoins + this.pendingCoins,
+                    banked: this.bankedCoins,
+                    pending: this.pendingCoins,
+                }
+            }));
+        }
     }
 
     public dispatchAltitudeUpdate() {
@@ -103,12 +146,22 @@ export class GameScene extends Scene {
 
                 console.log(`☁️ Cloud Sync Complete: Loaded ${data.maxAltitude}m`);
             }
+
+            // Coins are seeded outside the altitude branch: a player who has never
+            // scored can still hold coins from earlier runs, so a 0m best must not
+            // hide them.
+            this.bankedCoins = data.coins ?? 0;
+            this.dispatchCoinUpdate();
         } catch (error) {
             console.error("Failed to sync high score from cloud", error);
         }
     }
 
     preload() {
+        // Drawn here rather than shipped as a PNG, so the coin cannot go missing
+        // from the asset folder and fail silently as a missing-texture warning.
+        createCoinTexture(this);
+
         this.load.image('game-background', '/background/background.png');
         this.load.image('background-asteroid-1', '/background/objects/asteroid-1.png');
         this.load.image('background-asteroid-2', '/background/objects/asteroid-2.png');
@@ -293,6 +346,11 @@ export class GameScene extends Scene {
         this.currentAltitudeMeters = 0;
         this.isGameOver = false;
 
+        // Banked coins carry over between runs; pending coins do not, since the
+        // mountain that held them is about to be rebuilt.
+        this.pendingCoins = 0;
+        this.dispatchCoinUpdate();
+
         // Listen for collision with Cosmic Hazard sensor bodies
         this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionStartEvent) => {
             for (const pair of event.pairs) {
@@ -304,6 +362,12 @@ export class GameScene extends Scene {
                     (bodyB === this.player.body && bodyA.label === 'CosmicHazard')) {
                     const hazardBody = bodyA === this.player.body ? bodyB : bodyA;
                     this.handleHazardImpact(hazardBody);
+                }
+
+                if ((bodyA === this.player.body && bodyB.label === 'Coin') ||
+                    (bodyB === this.player.body && bodyA.label === 'Coin')) {
+                    const coinBody = bodyA === this.player.body ? bodyB : bodyA;
+                    this.handleCoinPickup(coinBody);
                 }
             }
         });
@@ -337,6 +401,9 @@ export class GameScene extends Scene {
         if (this.pivotEngine) {
             this.pivotEngine.updateEngineRoutines(delta);
         }
+
+        // Bank any unbanked haul once the player settles on ordinary ground.
+        this.maybeBankCoinsOnLanding();
 
         // Update active cosmic hazards
         if (this.levelGenerator) {
@@ -647,7 +714,7 @@ export class GameScene extends Scene {
 
         // 1. Capture and save the high score immediately before anything is destroyed
         if (this.maxAltitudeMeters) {
-            this.saveHighScore(this.maxAltitudeMeters);
+            this.saveHighScore(this.maxAltitudeMeters, this.bankedCoins);
         }
 
         // 2. Destroy the previous engine runtime references to safely unbind old event listeners 
@@ -669,10 +736,89 @@ export class GameScene extends Scene {
             window.dispatchEvent(new CustomEvent("tetherverse:gameover", {
                 detail: {
                     altitude: peakMeters,
-                    best: this.maxAltitudeMeters
+                    best: this.maxAltitudeMeters,
+                    coins: this.bankedCoins,
+                    // Reported so the overlay can say what was lost, rather than the
+                    // player wondering where the coins they just swept up went.
+                    lostCoins: this.pendingCoins,
                 }
             }));
         }
+    }
+
+    /**
+     * Collects a coin the player has touched.
+     *
+     * The coin is matched back to its display object through the Matter body's
+     * `plugin`, which is what `Coin` uses to carry a reference, so the scene never
+     * has to search its list. The body is removed from the world first: a sensor
+     * that is still colliding would be collected again on every subsequent frame.
+     */
+    private handleCoinPickup(coinBody: MatterJS.BodyType): void {
+        if (this.isGameOver) return;
+
+        const coin = coinBody?.plugin?.gameObject as Coin | undefined;
+        if (!coin || !coin.active) return;
+
+        // Held as pending, not banked. Landing on ordinary ground is what commits
+        // them, and that usually happens well after the last coin, so the check
+        // runs per frame in update() rather than here.
+        this.pendingCoins += 1;
+
+        // `collect` owns the Matter body: a sensor left in the world would be
+        // collected again on every frame it overlaps the player.
+        this.levelGenerator?.removeCoin(coin);
+        coin.collect();
+        this.dispatchCoinUpdate();
+    }
+
+    /**
+     * Banks the pending haul once the player has settled on ordinary ground.
+     *
+     * Called every frame rather than only on pickup, because the landing usually
+     * happens well after the last coin. It returns immediately when there is
+     * nothing pending, so the per-frame cost is a single comparison.
+     *
+     * Two conditions guard the test. The player's feet must be level with a
+     * platform top, and their vertical velocity must be near zero: flying past a
+     * platform at speed must not read as a landing. Risky ground does not count
+     * either, since banking on a bounce off the very platform the coins sit on
+     * would make the risk free.
+     */
+    private maybeBankCoinsOnLanding(): void {
+        if (this.pendingCoins === 0) return;
+        if (!this.player?.body) return;
+
+        const velocityY = this.player.body.velocity?.y ?? 0;
+        if (Math.abs(velocityY) > BANKING_REST_SPEED) return;
+
+        const feetY = this.player.y + this.player.displayHeight / 2;
+
+        const platform = (this.levelGenerator?.getPlatforms() ?? []).find((p) => {
+            const top = p.y - p.displayHeight / 2;
+            const withinX = Math.abs(p.x - this.player.x) <= p.displayWidth / 2 + 8;
+            return withinX && Math.abs(feetY - top) <= BANKING_FOOT_TOLERANCE;
+        });
+
+        // No match means airborne, and a match on the risk line means the haul is
+        // still out on the mountain.
+        if (!platform || platform.isRiskPlatform()) return;
+
+        this.bankPendingCoins();
+    }
+
+    /**
+     * Commits the pending haul.
+     *
+     * Split from the landing test so the game-over path can bank nothing while
+     * still reading the counters, and so the rule lives in one place.
+     */
+    private bankPendingCoins(): void {
+        if (this.pendingCoins === 0) return;
+
+        this.bankedCoins += this.pendingCoins;
+        this.pendingCoins = 0;
+        this.dispatchCoinUpdate();
     }
 
     private handleHazardImpact(hazardBody: MatterJS.BodyType): void {
@@ -724,7 +870,7 @@ export class GameScene extends Scene {
     }
 
     // Saving high scores to the database (called on game over)
-    private async saveHighScore(finalAltitude: number) {
+    private async saveHighScore(finalAltitude: number, coins: number) {
         try {
             // When embedded in the Excel Play launcher the token arrives by postMessage
             // rather than from a sign-in redirect, and there is no session cookie,
@@ -740,14 +886,27 @@ export class GameScene extends Scene {
                     'Content-Type': 'application/json',
                     ...(bridgeToken ? { Authorization: `Bearer ${bridgeToken}` } : {}),
                 },
-                body: JSON.stringify({ score: Math.floor(finalAltitude) })
+                body: JSON.stringify({
+                    score: Math.floor(finalAltitude),
+                    // Banked coins only. Pending ones were earned on the mountain
+                    // and the run just ended, so they are lost with it.
+                    coins: Math.floor(coins),
+                })
             });
 
             const data = await response.json();
 
             if (data.updated) {
-                console.log(`🎉 New Personal Best! Saved ${data.newRecord}m to database.`);
+                console.log(`🎉 New Personal Best! Saved ${data.maxAltitude}m to database.`);
                 // You could trigger a Phaser UI text here saying "NEW RECORD!"
+            }
+
+            // The server holds the authoritative total, so adopt it rather than
+            // trusting the local count.
+            if (data.success && typeof data.coins === 'number') {
+                this.bankedCoins = data.coins;
+                this.pendingCoins = 0;
+                this.dispatchCoinUpdate();
             }
 
         } catch (error) {

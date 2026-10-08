@@ -3,6 +3,7 @@
 import Phaser from "phaser";
 import { BasePlatform } from "../terrain/BasePlatform";
 import { CosmicHazard } from "../terrain/CosmicHazard";
+import { Coin } from "../terrain/Coin";
 import { GAME_CONSTANTS } from "../config/game-constants";
 import { COLLISION_CHANNELS } from "../config/physics-channels";
 import { createSeededRng, type Rng } from "./seeded-random";
@@ -81,6 +82,19 @@ interface ScoredCandidate {
     score: number;
 }
 
+/**
+ * Visual width at which a risk platform starts paying a second coin.
+ *
+ * Thresholds are in display pixels, which is what `setDisplaySize` actually sets:
+ * the generator works in half-widths and `BasePlatform` doubles them, so a
+ * `widthMax` of 95 arrives here as 190.
+ *
+ * Wider platforms get a second coin because there is room for it. A coin is 34px
+ * and two coins on a 90px ledge would overlap into an unreadable smear, which is
+ * why this is a width test rather than a per-tier bonus.
+ */
+const COIN_SECOND_AT_WIDTH = 130;
+
 const BEAT_SEQUENCE: Beat[] = [
     "SAFE",
     "CHALLENGE",
@@ -110,6 +124,7 @@ export class LevelGenerator {
     private readonly platforms: BasePlatform[];
     private readonly hookNodes: Phaser.Physics.Matter.Image[] = [];
     private readonly hazards: CosmicHazard[] = [];
+    private readonly coins: Coin[] = [];
     private readonly rng: Rng;
     private readonly maxReach: number;
     private readonly ropeLength: number;
@@ -617,9 +632,16 @@ export class LevelGenerator {
             candidate.y,
             candidate.width,
             candidate.height,
-            { friction: 0.9, restitution: 0.05, isCrumbling }
+            { friction: 0.9, restitution: 0.05, isCrumbling, isRisk: spec.risk }
         );
         this.platforms.push(platform);
+
+        // Coins sit on risk platforms only. Putting them anywhere else would make
+        // the safe line the profitable one, which is the opposite of what they are
+        // for: they are the reason to attempt the risk line at all.
+        if (spec.risk) {
+            this.spawnCoinsOn(platform);
+        }
 
         // Maybe spawn Cosmic Hazard in the traversal gap
         this.maybeSpawnHazard(prevX, prevY, candidate.x, candidate.y);
@@ -702,6 +724,28 @@ export class LevelGenerator {
     }
 
     // Recovery platform & hook spawned below the mainline to save missed jumps
+    /**
+     * Scatters coins just above a risk platform.
+     *
+     * The count scales with the tier so a deep run is worth more than a shallow
+     * one, which is the same curve the platform shapes follow. Capped so a long
+     * platform cannot turn into a coin farm.
+     */
+    private spawnCoinsOn(platform: BasePlatform): void {
+        const width = platform.displayWidth;
+        const count = width >= COIN_SECOND_AT_WIDTH ? 2 : 1;
+        const topY = platform.y - platform.displayHeight / 2;
+
+        for (let i = 0; i < count; i++) {
+            // Spread across the platform rather than stacking at the centre, so a
+            // single arc can sweep them up.
+            const t = count === 1 ? 0.5 : i / (count - 1);
+            const x = platform.x + (t - 0.5) * Math.max(40, width - 90);
+            const y = topY - this.between(18, 34);
+            this.coins.push(new Coin(this.scene, x, y));
+        }
+    }
+
     private maybeSpawnRecoveryRider(
         x: number,
         y: number,
@@ -802,6 +846,21 @@ export class LevelGenerator {
             if (h.y - playerY > cullDist + 300) {
                 h.destroy();
                 this.hazards.splice(i, 1);
+            }
+        }
+
+        // Coins are swept with the rest of the geometry. Without this they
+        // accumulate for the whole run, since a coin is never destroyed by
+        // landing on it.
+        for (let i = this.coins.length - 1; i >= 0; i--) {
+            const c = this.coins[i];
+            if (!c || !c.active) {
+                this.coins.splice(i, 1);
+                continue;
+            }
+            if (c.y - playerY > cullDist + 300) {
+                c.destroy();
+                this.coins.splice(i, 1);
             }
         }
     }
@@ -942,6 +1001,25 @@ export class LevelGenerator {
         return this.hazards;
     }
 
+    /**
+     * Live platforms. The scene reads this to tell a safe landing from a landing on
+     * the risk line, which is what decides whether a coin haul is banked.
+     */
+    public getPlatforms(): readonly BasePlatform[] {
+        return this.platforms;
+    }
+
+    /** Coins the scene collects on contact. */
+    public getCoins(): readonly Coin[] {
+        return this.coins;
+    }
+
+    /** Drops a collected coin so it stops colliding and stops being drawn. */
+    public removeCoin(coin: Coin): void {
+        const i = this.coins.indexOf(coin);
+        if (i !== -1) this.coins.splice(i, 1);
+    }
+
     public destroyAll(): void {
         for (const h of this.hazards) {
             if (h && h.active) h.destroy();
@@ -951,6 +1029,10 @@ export class LevelGenerator {
             if (n && n.active) n.destroy();
         }
         this.hookNodes.length = 0;
+        for (const c of this.coins) {
+            if (c && c.active) c.destroy();
+        }
+        this.coins.length = 0;
     }
 
     private between(min: number, max: number): number {

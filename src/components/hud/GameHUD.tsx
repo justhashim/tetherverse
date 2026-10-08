@@ -12,6 +12,12 @@ interface AltitudeDetail {
     zone: string;
 }
 
+interface CoinDetail {
+    coins: number;
+    banked: number;
+    pending: number;
+}
+
 export default function GameHUD({ onAbort }: GameHUDProps) {
     const [altitude, setAltitude] = useState<number>(0);
     const [maxAltitude, setMaxAltitude] = useState<number>(() => {
@@ -22,6 +28,7 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         return 0;
     });
     const [zone, setZone] = useState<string>('SURFACE');
+    const [coins, setCoins] = useState<CoinDetail>({ coins: 0, banked: 0, pending: 0 });
 
     useEffect(() => {
         const handleAltitudeUpdate = (e: Event) => {
@@ -33,6 +40,11 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
             }
         };
 
+        const handleCoinUpdate = (e: Event) => {
+            const detail = (e as CustomEvent<CoinDetail>).detail;
+            if (detail) setCoins(detail);
+        };
+
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -41,10 +53,12 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
         };
 
         window.addEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
+        window.addEventListener('tetherverse:coin-update', handleCoinUpdate);
         window.addEventListener('keydown', handleKeyDown);
 
         return () => {
             window.removeEventListener('tetherverse:altitude-update', handleAltitudeUpdate);
+            window.removeEventListener('tetherverse:coin-update', handleCoinUpdate);
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [onAbort]);
@@ -83,6 +97,28 @@ export default function GameHUD({ onAbort }: GameHUDProps) {
                         ESC
                     </span>
                 </button>
+
+                {/* Coin Purse. Pending coins are shown dimmed because they are on the
+                    mountain, not banked: the run can still take them. */}
+                <div
+                    className="pointer-events-auto flex flex-col items-start gap-1 bg-slate-950/70 border border-amber-500/30 backdrop-blur-md rounded-2xl px-4 py-3 shadow-[0_0_30px_rgba(245,158,11,0.12)]"
+                    title="Coins are kept when you land on solid ground. Coins on the risk line are lost if the run ends first."
+                >
+                    <div className="flex items-center gap-1.5 font-mono text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-950/40 text-amber-300">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]" />
+                        <span>COINS</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                        <span className="font-mono font-black text-2xl md:text-3xl text-white tracking-tight">
+                            {coins.coins.toLocaleString()}
+                        </span>
+                    </div>
+                    {coins.pending > 0 && (
+                        <div className="font-mono text-[10px] tracking-wider text-amber-400/80">
+                            <span className="text-amber-300 font-bold">+{coins.pending}</span> UNBANKED
+                        </div>
+                    )}
+                </div>
 
                 {/* Cyberpunk Altimeter Module */}
                 <div className="pointer-events-auto flex flex-col items-end gap-1.5 bg-slate-950/70 border border-cyan-500/30 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_0_30px_rgba(6,182,212,0.15)]">

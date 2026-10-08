@@ -140,11 +140,11 @@ export const tetherverseApi = {
     getScore: (authorization: string | null) =>
         forward('/score', { method: 'GET', authorization }),
 
-    postScore: (authorization: string | null, score: number) =>
+    postScore: (authorization: string | null, score: number, coins = 0) =>
         forward('/score', {
             method: 'POST',
             authorization,
-            body: JSON.stringify({ score }),
+            body: JSON.stringify({ score, coins }),
         }),
 
     getLeaderboard: () => forward('/leaderboard', { method: 'GET' }),

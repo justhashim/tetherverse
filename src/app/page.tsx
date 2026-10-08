@@ -15,6 +15,10 @@ type AppState = 'intro' | 'menu' | 'playing' | 'leaderboard';
 interface GameOverData {
   altitude: number;
   best: number;
+  /** Banked coins after this run. The server total is authoritative. */
+  coins: number;
+  /** Coins that were on the mountain when the run ended, and are therefore lost. */
+  lostCoins: number;
 }
 
 // --- Cinematic Intro Video Component with Sound Activation & Fade ---
@@ -474,7 +478,7 @@ export default function Home() {
                 )}
 
                 {/* Stat Grid */}
-                <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="mt-6 grid grid-cols-3 gap-3">
                   <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
                     <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
                       Final Altitude
@@ -492,6 +496,19 @@ export default function Home() {
                       {gameOver.best}
                       <span className="text-sm font-normal text-violet-500 ml-0.5">m</span>
                     </p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-500/25 bg-slate-950/60 p-4">
+                    <p className="font-mono text-[10px] tracking-[0.25em] text-slate-400 uppercase">
+                      Coins
+                    </p>
+                    <p className="mt-1 font-mono font-black text-3xl text-amber-400">
+                      {(gameOver.coins ?? 0).toLocaleString()}
+                    </p>
+                    {gameOver.lostCoins > 0 && (
+                      <p className="mt-0.5 font-mono text-[10px] tracking-wider text-rose-400/80">
+                        {gameOver.lostCoins} LOST
+                      </p>
+                    )}
                   </div>
                 </div>
 

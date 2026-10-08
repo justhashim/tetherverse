@@ -20,7 +20,9 @@ export async function POST(request: Request) {
     try {
         const requestHeaders = await headers();
 
-        const { score } = await request.json().catch(() => ({}) as { score?: unknown });
+        const { score, coins } = await request.json().catch(
+            () => ({}),
+        ) as { score?: unknown; coins?: unknown };
 
         // Reject a malformed score here rather than forwarding it, so a bad payload
         // costs one round trip less and the error names the actual problem.
@@ -28,10 +30,17 @@ export async function POST(request: Request) {
             return Response.json({ error: 'Invalid score value' }, { status: 400 });
         }
 
+        // Coins are optional: a client from before the coin system posts none, and
+        // treating that as an error would throw away a real score over a new field.
+        if (coins !== undefined && (typeof coins !== 'number' || isNaN(coins) || coins < 0)) {
+            return Response.json({ error: 'Invalid coin value' }, { status: 400 });
+        }
+
         return toResponse(
             await tetherverseApi.postScore(
                 readBearerHeader(requestHeaders.get('authorization')),
                 score,
+                typeof coins === 'number' ? coins : 0,
             ),
         );
     } catch (error) {

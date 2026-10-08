@@ -4,5 +4,6 @@ export const COLLISION_CHANNELS = {
     JACK_TIP: 0x0004,
     TERRAIN: 0x0008,
     HOOK_NODE: 0x0010,
-    HAZARD: 0x0020
+    HAZARD: 0x0020,
+    COIN: 0x0040
 };
